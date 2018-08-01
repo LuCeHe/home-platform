@@ -751,9 +751,8 @@ def filterBlacklist(houseIds, filename):
 def filterRealisticSceneLayout(datasetRoot, houseIds):
     """
     NOTE: same criteria as in
-          A. Das, S. Datta, G. Gkioxari, S. Lee, D. Parikh, and D. Batra, “Embodied Question Answering,” 2017.
+      A. Das, S. Datta, G. Gkioxari, S. Lee, D. Parikh, and D. Batra, "Embodied Question Answering," 2017.
     """
-
     filename = os.path.join(datasetRoot, 'metadata', 'houseAnnoMturk.csv')
     houseInfo = HouseScoreInformation(filename)
 

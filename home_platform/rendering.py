@@ -1,33 +1,36 @@
-from __future__ import print_function
 # Copyright (c) 2017, IGLU consortium
 # All rights reserved.
-# 
-# Redistribution and use in source and binary forms, with or without 
+#
+# Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
-# 
-# 1. Redistributions of source code must retain the above copyright 
+#
+# 1. Redistributions of source code must retain the above copyright
 #    notice, this list of conditions and the following disclaimer.
-#   
+#
 # 2. Redistributions in binary form must reproduce the above copyright
 #    notice, this list of conditions and the following disclaimer in the
 #    documentation and/or other materials provided with the distribution.
-# 
+#
 # 3. Neither the name of the copyright holder nor the names of its contributors
 #    may be used to endorse or promote products derived from this software without
 #    specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
 # WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-# IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
-# INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT 
-# NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR 
-# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
-# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY 
+# IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+# INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+# NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
 # OF SUCH DAMAGE.
 
-import os, sys
+from __future__ import print_function
+
+import os
+import sys
+import six
 import logging
 import numpy as np
 import imageio
@@ -35,7 +38,7 @@ import imageio
 from panda3d.core import VBase4, PointLight, AmbientLight, AntialiasAttrib, \
     GeomVertexReader, GeomTristrips, GeomTriangles, LineStream, SceneGraphAnalyzer, \
     LVecBase3f, LVecBase4f, TransparencyAttrib, ColorAttrib, TextureAttrib, GeomEnums, \
-    BitMask32, RenderState, LColor
+    BitMask32, RenderState, LColor, LVector4f
 
 from panda3d.core import GraphicsEngine, GraphicsPipeSelection, Loader, RescaleNormalAttrib, \
     Texture, GraphicsPipe, GraphicsOutput, FrameBufferProperties, WindowProperties, Camera, PerspectiveLens, ModelNode
@@ -251,20 +254,20 @@ class Panda3dRenderer(World):
     def getRgbImages(self, channelOrder="RGB"):
         images = dict()
         for name, tex in iteritems(self.rgbTextures):
-            
+
             # XXX: not sure about calling makeRamImage() before getting the image data, since it returns an empty image
             #      and overwrite any previously rendered image. We may just call it once when we create the texture.
             if not tex.mightHaveRamImage():
                 tex.makeRamImage()
-            
+
             if sys.version_info[0] < 3:
                 data = tex.getRamImageAs(channelOrder).getData()   # Python 2
             else:
                 # NOTE: see https://github.com/panda3d/panda3d/issues/173
                 data = bytes(memoryview(tex.getRamImageAs(channelOrder)))  # Python 3
-            
+
             image = np.frombuffer(data, dtype=np.uint8)  # Must match Texture.TUnsignedByte
-                
+
             image.shape = (tex.getYSize(), tex.getXSize(), len(channelOrder))
             image = np.flipud(image)
             images[name] = image
@@ -281,13 +284,13 @@ class Panda3dRenderer(World):
                 #      and overwrite any previously rendered image. We may just call it once when we create the texture.
                 if not tex.mightHaveRamImage():
                     tex.makeRamImage()
-                    
+
                 if sys.version_info[0] < 3:
                     data = tex.getRamImage().getData()   # Python 2
                 else:
                     # NOTE: see https://github.com/panda3d/panda3d/issues/173
                     data = bytes(memoryview(tex.getRamImage()))  # Python 3
-                
+
                 nbBytesComponentFromData = len(data) / (tex.getYSize() * tex.getXSize())
                 if nbBytesComponentFromData == 4:
                     depthImage = np.frombuffer(data, dtype=np.float32)  # Must match Texture.TFloat
@@ -318,7 +321,7 @@ class Panda3dRenderer(World):
                 images[name] = depthImage
         else:
 
-            for name, _ in iteritems(self.depthTextures):
+            for name in six.iterkeys(self.depthTextures):
                 images[name] = np.zeros(self.size, dtype=np.float32)
 
         return images
@@ -425,7 +428,7 @@ class Panda3dSemanticsRenderer(World):
                 camera.setTransform(cameraTransform)
             camera.node().setPreserveTransform(ModelNode.PTLocal)
             self.cameras.append(camera)
-            
+
             # Reparent node below the existing physic node (if any)
             physicsNp = agentNp.find('**/physics')
             if not physicsNp.isEmpty():
@@ -590,19 +593,19 @@ class Panda3dSemanticsRenderer(World):
                 np.show(self.cameraMask)
             else:
                 np.hide(BitMask32.allOn())
-    
+
         for np in self.scene.scene.findAllMatches('**/layouts/**/render-semantics/*w'):
             if showWalls:
                 np.show(self.cameraMask)
             else:
                 np.hide(BitMask32.allOn())
-            
+
         for np in self.scene.scene.findAllMatches('**/layouts/**/render-semantics/*f'):
             if showFloors:
                 np.show(self.cameraMask)
             else:
                 np.hide(BitMask32.allOn())
-        
+
     def destroy(self):
         self.graphicsEngine.removeAllWindows()
         del self.pipe
@@ -639,6 +642,664 @@ class Panda3dSemanticsRenderer(World):
         # NOTE: we need to call frame rendering twice in onscreen mode because of double-buffering
         if self.mode == 'onscreen':
             self.graphicsEngine.renderFrame()
+
+
+class InstancesRenderer(object):
+
+    def __init__(self, scene, size=(512, 512), mode='offscreen',
+                 zNear=0.1, zFar=1000.0, fov=40.0,
+                 cameraTransform=None):
+
+        # Off-screen buffers are not supported in OSX
+        if sys.platform == 'darwin':
+            mode = 'onscreen'
+
+        super(InstancesRenderer, self).__init__()
+
+        instanceColors = dict()
+        self.__dict__.update(scene=scene, size=size, mode=mode, zNear=zNear,
+                             zFar=zFar, fov=fov,
+                             cameraTransform=cameraTransform, instanceColors=instanceColors)
+
+        self.cameraMask = BitMask32.bit(7)
+        self.graphicsEngine = GraphicsEngine.getGlobalPtr()
+        self.loader = Loader.getGlobalPtr()
+        self.graphicsEngine.setDefaultLoader(self.loader)
+
+        self._initModels()
+
+        selection = GraphicsPipeSelection.getGlobalPtr()
+        self.pipe = selection.makeDefaultPipe()
+        logger.debug('Using %s' % (self.pipe.getInterfaceName()))
+
+        # Attach a camera to every agent in the scene
+        self.cameras = []
+        for agentNp in self.scene.scene.findAllMatches('**/agents/agent*'):
+            camera = agentNp.attachNewNode(ModelNode('render-instances'))
+            if self.cameraTransform is not None:
+                camera.setTransform(cameraTransform)
+            camera.node().setPreserveTransform(ModelNode.PTLocal)
+            self.cameras.append(camera)
+
+            # Reparent node below the existing physic node (if any)
+            physicsNp = agentNp.find('**/physics')
+            if not physicsNp.isEmpty():
+                camera.reparentTo(physicsNp)
+
+        self.rgbBuffers = dict()
+        self.rgbTextures = dict()
+
+        self._initRgbCapture()
+
+    def _initInstanceColors(self, models):
+
+        size = int(np.ceil(np.cbrt(len(models)) - 1e-6))
+
+        # Uniform sampling of colors
+        colors = np.zeros((size ** 3, 4))
+        i = 0
+        for r in np.linspace(0.0, 1.0, size):
+            for g in np.linspace(0.0, 1.0, size):
+                for b in np.linspace(0.0, 1.0, size):
+                    colors[i] = [r, g, b, 1.0]
+                    i += 1
+
+        # Shuffle
+        indices = np.arange(len(colors))
+        np.random.shuffle(indices)
+        colors = colors[indices]
+
+        instanceColors = dict()
+        for i, model in enumerate(models):
+            instanceId = model.getNetTag('instance-id')
+            instanceColors[instanceId] = colors[i]
+
+        return instanceColors
+
+    def _initModels(self):
+
+        # Get the list of all models in the scene
+        models = []
+        for model in self.scene.scene.findAllMatches('**/objects/*/+ModelNode'):
+            models.append(model)
+        for model in self.scene.scene.findAllMatches('**/layouts/*/+ModelNode'):
+            models.append(model)
+
+        # Associate a color with each model
+        self.instanceColors = self._initInstanceColors(models)
+
+        for model in models:
+
+            objectNp = model.getParent()
+            rendererNp = objectNp.attachNewNode('render-instances')
+            model = model.copyTo(rendererNp)
+
+            # Set the model to be visible only to this camera
+            model.hide(BitMask32.allOn())
+            model.show(self.cameraMask)
+
+            # Get semantic-related color of model
+            instanceId = model.getNetTag('instance-id')
+            color = self.instanceColors[instanceId]
+
+            # Clear all GeomNode render attributes and set a specified flat
+            # color
+            for nodePath in model.findAllMatches('**/+GeomNode'):
+                geomNode = nodePath.node()
+                for n in range(geomNode.getNumGeoms()):
+                    geomNode.setGeomState(n, RenderState.make(
+                        ColorAttrib.makeFlat(LColor(color[0], color[1], color[2], 1.0)), 1))
+
+            # Disable lights for this model
+            model.setLightOff(1)
+
+            # Enable antialiasing
+            model.setAntialias(AntialiasAttrib.MAuto)
+
+            # Reparent render node below the existing physic node (if any)
+            physicsNp = objectNp.find('**/physics')
+            if not physicsNp.isEmpty():
+                rendererNp.reparentTo(physicsNp)
+
+    def _initRgbCapture(self):
+
+        for camera in self.cameras:
+
+            camNode = Camera('Instances rendering camera')
+            camNode.setCameraMask(self.cameraMask)
+            lens = PerspectiveLens()
+            lens.setFov(self.fov)
+            lens.setAspectRatio(float(self.size[0]) / float(self.size[1]))
+            lens.setNear(self.zNear)
+            lens.setFar(self.zFar)
+            camNode.setLens(lens)
+            camNode.setScene(self.scene.scene)
+            cam = camera.attachNewNode(camNode)
+
+            winprops = WindowProperties.size(self.size[0], self.size[1])
+            fbprops = FrameBufferProperties.getDefault()
+            fbprops = FrameBufferProperties(fbprops)
+            fbprops.setRgbaBits(8, 8, 8, 8)
+
+            flags = GraphicsPipe.BFFbPropsOptional
+            if self.mode == 'onscreen':
+                flags = flags | GraphicsPipe.BFRequireWindow
+            elif self.mode == 'offscreen':
+                flags = flags | GraphicsPipe.BFRefuseWindow
+            else:
+                raise Exception('Unsupported rendering mode: %s' % (self.mode))
+
+            buf = self.graphicsEngine.makeOutput(self.pipe, 'RGB buffer - instances rendering', 0, fbprops,
+                                                 winprops, flags)
+            if buf is None:
+                raise Exception('Unable to create RGB buffer')
+
+            # Set to render at the end
+            buf.setSort(10000)
+
+            dr = buf.makeDisplayRegion()
+            dr.setSort(0)
+            dr.setCamera(cam)
+            dr = camNode.getDisplayRegion(0)
+
+            tex = Texture()
+            tex.setFormat(Texture.FRgba8)
+            tex.setComponentType(Texture.TUnsignedByte)
+            buf.addRenderTexture(
+                tex, GraphicsOutput.RTMCopyRam, GraphicsOutput.RTPColor)
+            tex.makeRamImage()
+            # XXX: should use tex.setMatchFramebufferFormat(True)?
+
+            self.rgbBuffers[camera.getNetTag('agent-id')] = buf
+            self.rgbTextures[camera.getNetTag('agent-id')] = tex
+
+    def destroy(self):
+        self.graphicsEngine.removeAllWindows()
+        del self.pipe
+
+    def _getVisibleSurfaceForObjectId(self, image, instanceId):
+        uniqueColors, counts = np.unique(
+            image.reshape(-1, image.shape[2]), axis=0, return_counts=True)
+        uniqueColors = uniqueColors / 255.0
+
+        surface = 0.0
+        refColor = self.instanceColors[instanceId]
+        for color, count in zip(uniqueColors, counts):
+            if np.allclose(color, refColor, atol=1 / 255.0):
+                surface = float(count)
+
+        return surface
+
+    def getOccludedObjectIds(self, agentId):
+
+        occlusionRatios = dict()
+        visibleInstanceIds = self.getVisibleObjectIds(agentId)
+        for refInstanceId in visibleInstanceIds:
+
+            # Get the visible surface with occlusion
+            image = self.getInstancesImage(agentId)
+            surfaceOccluded = self._getVisibleSurfaceForObjectId(
+                image, refInstanceId)
+
+            # Hide all other models in the scene but his one
+            for model in self.scene.scene.findAllMatches('**/objects/*/render-instances/+ModelNode'):
+                instanceId = model.getNetTag('instance-id')
+                if instanceId != refInstanceId and instanceId in visibleInstanceIds:
+                    model.hide(BitMask32(self.cameraMask))
+            for model in self.scene.scene.findAllMatches('**/layouts/*/render-instances/+ModelNode'):
+                instanceId = model.getNetTag('instance-id')
+                if instanceId != refInstanceId and instanceId in visibleInstanceIds:
+                    model.hide(BitMask32(self.cameraMask))
+
+            # Get the visible surface without occlusion
+            image = self.getInstancesImage(agentId)
+            surfaceRef = self._getVisibleSurfaceForObjectId(
+                image, refInstanceId)
+
+            # Revert the scene to original
+            for model in self.scene.scene.findAllMatches('**/objects/*/render-instances/+ModelNode'):
+                instanceId = model.getNetTag('instance-id')
+                if model.getNetTag('instance-id') != refInstanceId:
+                    model.show(BitMask32(self.cameraMask))
+            for model in self.scene.scene.findAllMatches('**/layouts/*/render-instances/+ModelNode'):
+                instanceId = model.getNetTag('instance-id')
+                if model.getNetTag('instance-id') != refInstanceId:
+                    model.show(BitMask32(self.cameraMask))
+
+            # Calculate the ratio of occlusion
+            occlusionRatio = 1.0 - surfaceOccluded / surfaceRef
+            assert occlusionRatio >= 0.0 and occlusionRatio <= 1.0
+
+            occlusionRatios[refInstanceId] = occlusionRatio
+
+        return occlusionRatios
+
+    def getVisibleObjectIds(self, agentId):
+
+        # Get the list of visible objects
+        image = self.getInstancesImage(agentId)
+
+        uniqueColors = np.unique(
+            image.reshape(-1, image.shape[2]), axis=0) / 255.0
+        visibleModelIds = []
+        for color in uniqueColors:
+            for instanceId, refColor in six.iteritems(self.instanceColors):
+                if np.allclose(color, refColor, atol=1 / 255.0):
+                    visibleModelIds.append(instanceId)
+
+        return visibleModelIds
+
+    def getInstancesImage(self, agentId, channelOrder="RGBA"):
+
+        self.graphicsEngine.renderFrame()
+
+        # NOTE: we need to call frame rendering twice in onscreen mode because
+        # of double-buffering
+        if self.mode == 'onscreen':
+            self.graphicsEngine.renderFrame()
+
+        tex = self.rgbTextures[agentId]
+        data = tex.getRamImageAs(channelOrder)
+        if (sys.version_info > (3, 0)):
+            # Must match Texture.TUnsignedByte
+            # NOTE: see https://github.com/panda3d/panda3d/issues/173
+            data_img = bytes(memoryview(data))
+            image = np.frombuffer(data_img, dtype=np.uint8)
+        else:
+            # Must match Texture.TUnsignedByte
+            data_img = data.get_data()
+            image = np.frombuffer(data_img, dtype=np.uint8)
+        image.shape = (tex.getYSize(), tex.getXSize(), 4)
+        image = np.flipud(image)
+
+        return image
+
+
+class RgbRenderer(object):
+    def __init__(self, scene, size=(512, 512), mode='offscreen', zNear=0.1, zFar=1000.0, fov=40.0, cameraTransform=None):
+
+        # Off-screen buffers are not supported in OSX
+        if sys.platform == 'darwin':
+            mode = 'onscreen'
+
+        super(RgbRenderer, self).__init__()
+
+        self.__dict__.update(scene=scene, size=size, mode=mode, zNear=zNear, zFar=zFar, fov=fov,
+                             cameraTransform=cameraTransform)
+
+        self.cameraMask = BitMask32.bit(0)
+        self.graphicsEngine = GraphicsEngine.getGlobalPtr()
+        self.loader = Loader.getGlobalPtr()
+        self.graphicsEngine.setDefaultLoader(self.loader)
+
+        # Change some scene attributes for rendering
+        self.scene.scene.setAttrib(RescaleNormalAttrib.makeDefault())
+        self.scene.scene.setTwoSided(True)
+
+        selection = GraphicsPipeSelection.getGlobalPtr()
+        self.pipe = selection.makeDefaultPipe()
+        logger.debug('Using %s' % (self.pipe.getInterfaceName()))
+
+        # Attach a camera to every agent in the scene
+        self.cameras = []
+        for agentNp in self.scene.scene.findAllMatches('**/agents/agent*'):
+            camera = agentNp.attachNewNode(ModelNode('camera-rgb'))
+            if self.cameraTransform is not None:
+                camera.setTransform(cameraTransform)
+            camera.node().setPreserveTransform(ModelNode.PTLocal)
+            self.cameras.append(camera)
+
+        self.rgbBuffers = dict()
+        self.rgbTextures = dict()
+
+        self._initRgbCapture()
+        self._addDefaultLighting()
+
+        self.notifySceneChanged()
+
+    def notifySceneChanged(self):
+
+        for modelNp in self.scene.scene.findAllMatches('**/object-*/model-*'):
+
+            isInitialized = False
+            objectNp = modelNp.getParent()
+            for childNp in modelNp.getChildren():
+                if childNp.getName() == 'render-rgb':
+                    isInitialized = True
+                    break
+
+            if not isInitialized:
+                rendererNp = objectNp.attachNewNode('render-rgb')
+                model = modelNp.copyTo(rendererNp)
+
+                # Set the model to be visible only to this camera
+                model.hide(BitMask32.allOn())
+                model.show(self.cameraMask)
+
+                # Reparent render node below the existing physic node (if any)
+                physicsNp = objectNp.find('**/physics')
+                if not physicsNp.isEmpty():
+                    rendererNp.reparentTo(physicsNp)
+
+    def setBackgroundColor(self, rgba):
+        for buffer in six.itervalues(self.rgbBuffers):
+            buffer.setClearColor(LVector4f(*rgba))
+
+    def _initRgbCapture(self):
+
+        for camera in self.cameras:
+
+            camNode = Camera('RGB camera')
+            camNode.setCameraMask(self.cameraMask)
+            lens = PerspectiveLens()
+            lens.setFov(self.fov)
+            lens.setAspectRatio(float(self.size[0]) / float(self.size[1]))
+            lens.setNear(self.zNear)
+            lens.setFar(self.zFar)
+            camNode.setLens(lens)
+            camNode.setScene(self.scene.scene)
+            cam = camera.attachNewNode(camNode)
+
+            winprops = WindowProperties.size(self.size[0], self.size[1])
+            fbprops = FrameBufferProperties.getDefault()
+            fbprops = FrameBufferProperties(fbprops)
+            fbprops.setRgbaBits(8, 8, 8, 0)
+
+            flags = GraphicsPipe.BFFbPropsOptional
+            if self.mode == 'onscreen':
+                flags = flags | GraphicsPipe.BFRequireWindow
+            elif self.mode == 'offscreen':
+                flags = flags | GraphicsPipe.BFRefuseWindow
+            else:
+                raise Exception('Unsupported rendering mode: %s' % (self.mode))
+
+            buf = self.graphicsEngine.makeOutput(self.pipe, 'RGB buffer Rendering', 0, fbprops,
+                                                 winprops, flags)
+            if buf is None:
+                raise Exception('Unable to create RGB buffer')
+
+            # Set to render at the end
+            buf.setSort(10000)
+
+            dr = buf.makeDisplayRegion()
+            dr.setSort(0)
+            dr.setCamera(cam)
+            dr = camNode.getDisplayRegion(0)
+
+            tex = Texture()
+            tex.setFormat(Texture.FRgb8)
+            tex.setComponentType(Texture.TUnsignedByte)
+            buf.addRenderTexture(
+                tex, GraphicsOutput.RTMCopyRam, GraphicsOutput.RTPColor)
+            tex.makeRamImage()
+            # XXX: should use tex.setMatchFramebufferFormat(True)?
+
+            agent = camera.getParent()
+            self.rgbBuffers[agent.getName()] = buf
+            self.rgbTextures[agent.getName()] = tex
+
+    def showRoomLayout(self, showCeilings=True, showWalls=True, showFloors=True):
+
+        for np in self.scene.scene.findAllMatches('**/layouts/**/render-rgb/*c'):
+            if showCeilings:
+                np.show(self.cameraMask)
+            else:
+                np.hide(BitMask32.allOn())
+
+        for np in self.scene.scene.findAllMatches('**/layouts/**/render-rgb/*w'):
+            if showWalls:
+                np.show(self.cameraMask)
+            else:
+                np.hide(BitMask32.allOn())
+
+        for np in self.scene.scene.findAllMatches('**/layouts/**/render-rgb/*f'):
+            if showFloors:
+                np.show(self.cameraMask)
+            else:
+                np.hide(BitMask32.allOn())
+
+    def destroy(self):
+        self.graphicsEngine.removeAllWindows()
+        del self.pipe
+
+    def getRgbImage(self, agentId, channelOrder="RGB"):
+
+        self.graphicsEngine.renderFrame()
+
+        # NOTE: we need to call frame rendering twice in onscreen mode because
+        # of double-buffering
+        if self.mode == 'onscreen':
+            self.graphicsEngine.renderFrame()
+
+        tex = self.rgbTextures[agentId]
+
+        # XXX: not sure about calling makeRamImage() before getting the image data, since it returns an empty image
+        # and overwrite any previously rendered image. We may just call it
+        # once when we create the texture.
+        if not tex.mightHaveRamImage():
+            tex.makeRamImage()
+
+        if sys.version_info[0] < 3:
+            data = tex.getRamImageAs(channelOrder).getData()   # Python 2
+        else:
+            # NOTE: see https://github.com/panda3d/panda3d/issues/173
+            data = bytes(memoryview(
+                tex.getRamImageAs(channelOrder)))  # Python 3
+
+        # Must match Texture.TUnsignedByte
+        image = np.frombuffer(data, dtype=np.uint8)
+
+        image.shape = (tex.getYSize(), tex.getXSize(), len(channelOrder))
+        image = np.flipud(image)
+
+        return image
+
+    def _addDefaultLighting(self):
+        alight = AmbientLight('alight')
+        alight.setColor(LVector4f(0.2, 0.2, 0.2, 1))
+        alnp = self.scene.scene.attachNewNode(alight)
+        self.scene.scene.setLight(alnp)
+
+        for camera in self.cameras:
+
+            # NOTE: Point light following the camera
+            plight = PointLight('plight')
+            plight.setColor(LVector4f(1.0, 1.0, 1.0, 1))
+            plnp = camera.attachNewNode(plight)
+            self.scene.scene.setLight(plnp)
+
+
+class DepthRenderer(object):
+    def __init__(self, scene, size=(512, 512), mode='offscreen', zNear=0.1, zFar=1000.0, fov=40.0, cameraTransform=None):
+
+        # Off-screen buffers are not supported in OSX
+        if sys.platform == 'darwin':
+            mode = 'onscreen'
+
+        self.__dict__.update(scene=scene, size=size, mode=mode, zNear=zNear, zFar=zFar, fov=fov,
+                             cameraTransform=cameraTransform)
+
+        self.cameraMask = BitMask32.bit(9)
+        self.graphicsEngine = GraphicsEngine.getGlobalPtr()
+        self.loader = Loader.getGlobalPtr()
+        self.graphicsEngine.setDefaultLoader(self.loader)
+
+        self._initModels()
+
+        selection = GraphicsPipeSelection.getGlobalPtr()
+        self.pipe = selection.makeDefaultPipe()
+        logger.debug('Using %s' % (self.pipe.getInterfaceName()))
+
+        # Attach a camera to every agent in the scene
+        self.cameras = []
+        for agentNp in self.scene.scene.findAllMatches('**/agents/agent*'):
+            camera = agentNp.attachNewNode(ModelNode('camera-depth'))
+            if self.cameraTransform is not None:
+                camera.setTransform(cameraTransform)
+            camera.node().setPreserveTransform(ModelNode.PTLocal)
+            self.cameras.append(camera)
+
+        self.depthBuffers = dict()
+        self.depthTextures = dict()
+
+        self._initDepthCapture()
+
+    def _initModels(self):
+
+        for model in self.scene.scene.findAllMatches('**/+ModelNode'):
+
+            objectNp = model.getParent()
+            rendererNp = objectNp.attachNewNode('render-depth')
+            model = model.copyTo(rendererNp)
+
+            # Set the model to be visible only to this camera
+            model.hide(BitMask32.allOn())
+            model.show(self.cameraMask)
+
+            # Reparent render node below the existing physic node (if any)
+            physicsNp = objectNp.find('**/physics')
+            if not physicsNp.isEmpty():
+                rendererNp.reparentTo(physicsNp)
+
+    def _initDepthCapture(self):
+
+        for camera in self.cameras:
+
+            camNode = Camera('Depth camera')
+            camNode.setCameraMask(self.cameraMask)
+            lens = PerspectiveLens()
+            lens.setFov(self.fov)
+            lens.setAspectRatio(float(self.size[0]) / float(self.size[1]))
+            lens.setNear(self.zNear)
+            lens.setFar(self.zFar)
+            camNode.setLens(lens)
+            camNode.setScene(self.scene.scene)
+            cam = camera.attachNewNode(camNode)
+
+            winprops = WindowProperties.size(self.size[0], self.size[1])
+            fbprops = FrameBufferProperties.getDefault()
+            fbprops = FrameBufferProperties(fbprops)
+            fbprops.setRgbColor(False)
+            fbprops.setRgbaBits(0, 0, 0, 0)
+            fbprops.setStencilBits(0)
+            fbprops.setMultisamples(0)
+            fbprops.setBackBuffers(0)
+            fbprops.setDepthBits(16)
+
+            flags = GraphicsPipe.BFFbPropsOptional
+            if self.mode == 'onscreen':
+                flags = flags | GraphicsPipe.BFRequireWindow
+            elif self.mode == 'offscreen':
+                flags = flags | GraphicsPipe.BFRefuseWindow
+            else:
+                raise Exception('Unsupported rendering mode: %s' % (self.mode))
+
+            buf = self.graphicsEngine.makeOutput(self.pipe, 'Depth buffer', 0, fbprops,
+                                                 winprops, flags)
+            if buf is None:
+                raise Exception('Unable to create depth buffer')
+
+            # Set to render at the end
+            buf.setSort(10000)
+
+            dr = buf.makeDisplayRegion()
+            dr.setSort(0)
+            dr.setCamera(cam)
+            dr = camNode.getDisplayRegion(0)
+
+            tex = Texture()
+            tex.setFormat(Texture.FDepthComponent)
+            tex.setComponentType(Texture.TFloat)
+            buf.addRenderTexture(
+                tex, GraphicsOutput.RTMCopyRam, GraphicsOutput.RTPDepth)
+            tex.makeRamImage()
+            # XXX: should use tex.setMatchFramebufferFormat(True)?
+
+            agentId = camera.getNetTag('agent-id')
+            self.depthBuffers[agentId] = buf
+            self.depthTextures[agentId] = tex
+
+    def showRoomLayout(self, showCeilings=True, showWalls=True, showFloors=True):
+
+        for np in self.scene.scene.findAllMatches('**/layouts/**/render-depth/*c'):
+            if showCeilings:
+                np.show(self.cameraMask)
+            else:
+                np.hide(BitMask32.allOn())
+
+        for np in self.scene.scene.findAllMatches('**/layouts/**/render-depth/*w'):
+            if showWalls:
+                np.show(self.cameraMask)
+            else:
+                np.hide(BitMask32.allOn())
+
+        for np in self.scene.scene.findAllMatches('**/layouts/**/render-depth/*f'):
+            if showFloors:
+                np.show(self.cameraMask)
+            else:
+                np.hide(BitMask32.allOn())
+
+    def destroy(self):
+        self.graphicsEngine.removeAllWindows()
+        del self.pipe
+
+    def getDepthImage(self, agentId, mode='normalized'):
+
+        self.graphicsEngine.renderFrame()
+
+        # NOTE: we need to call frame rendering twice in onscreen mode because
+        # of double-buffering
+        if self.mode == 'onscreen':
+            self.graphicsEngine.renderFrame()
+
+        tex = self.depthTextures[agentId]
+
+        # XXX: not sure about calling makeRamImage() before getting the image data, since it returns an empty image
+        # and overwrite any previously rendered image. We may just call it
+        # once when we create the texture.
+        if not tex.mightHaveRamImage():
+            tex.makeRamImage()
+
+        if sys.version_info[0] < 3:
+            data = tex.getRamImage().getData()   # Python 2
+        else:
+            # NOTE: see https://github.com/panda3d/panda3d/issues/173
+            data = bytes(memoryview(tex.getRamImage()))  # Python 3
+
+        nbBytesComponentFromData = len(
+            data) / (tex.getYSize() * tex.getXSize())
+        if nbBytesComponentFromData == 4:
+            # Must match Texture.TFloat
+            depthImage = np.frombuffer(data, dtype=np.float32)
+
+        elif nbBytesComponentFromData == 2:
+            # NOTE: This can happen on some graphic hardware, where unsigned 16-bit data is stored
+            # despite setting the texture component type to 32-bit floating
+            # point.
+            # Must match Texture.TFloat
+            depthImage = np.frombuffer(data, dtype=np.uint16)
+            depthImage = depthImage.astype(np.float32) / 65535
+
+        depthImage.shape = (tex.getYSize(), tex.getXSize())
+        depthImage = np.flipud(depthImage)
+
+        if mode == 'distance':
+            # NOTE: in Panda3d, the returned depth image seems to be
+            # already linearized
+            depthImage = self.zNear + depthImage / (self.zFar - self.zNear)
+
+            # Adapted from: https://stackoverflow.com/questions/6652253/getting-the-true-z-value-from-the-depth-buffer
+            # depthImage = 2.0 * depthImage - 1.0
+            # depthImage = 2.0 * self.zNear * self.zFar / (self.zFar + self.zNear - depthImage * (self.zFar - self.zNear))
+
+        elif mode == 'normalized':
+            # Nothing to do
+            pass
+        else:
+            raise Exception(
+                'Unsupported output depth image mode: %s' % (mode))
+
+        return depthImage
 
 
 def get3DPointsFromModel(model):
