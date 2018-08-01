@@ -1,46 +1,53 @@
-from __future__ import print_function
 # Copyright (c) 2017, IGLU consortium
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
-# 
-#  - Redistributions of source code must retain the above copyright notice, 
+#
+#  - Redistributions of source code must retain the above copyright notice,
 #    this list of conditions and the following disclaimer.
-#  - Redistributions in binary form must reproduce the above copyright notice, 
-#    this list of conditions and the following disclaimer in the documentation 
+#  - Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#  - Neither the name of the copyright holder nor the names of its contributors 
-#    may be used to endorse or promote products derived from this software 
+#  - Neither the name of the copyright holder nor the names of its contributors
+#    may be used to endorse or promote products derived from this software
 #    without specific prior written permission.
-# 
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
-# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
-# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
-# IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
-# INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT 
-# NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, 
-# OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
-# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+# IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+# INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+# NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+# OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+from __future__ import print_function
+
 import os
-import re
 import json
+import re
+import six
+import random
+import glob
 import csv
-import logging
 import numpy as np
+import subprocess
+import logging
 
 from panda3d.core import NodePath, Loader, LoaderOptions, Filename, TransformState,\
     LMatrix4f, Spotlight, LVector3f, PointLight, PerspectiveLens, CS_zup_right, CS_yup_right,\
     BitMask32, ModelNode
 
+from home_platform.importer import obj2egg, obj2bam
 from home_platform.constants import MODEL_CATEGORY_MAPPING
 from home_platform.core import Scene
 from home_platform.utils import mat4ToNumpyArray
 
 logger = logging.getLogger(__name__)
+
 
 def loadModel(modelPath):
     loader = Loader.getGlobalPtr()
@@ -54,11 +61,13 @@ def loadModel(modelPath):
         raise IOError('Could not load model file: %s' % (modelPath))
     return nodePath
 
+
 def ignoreVariant(modelId):
     suffix = "_0"
     if modelId.endswith(suffix):
         modelId = modelId[:len(modelId) - len(suffix)]
     return modelId
+
 
 def data_dir():
     """ Get SUNCG data path (must be symlinked to ~/.suncg)
@@ -70,7 +79,7 @@ def data_dir():
         path = os.path.abspath(os.environ['SUNCG_DATA_DIR'])
     else:
         path = os.path.join(os.path.abspath(os.path.expanduser('~')), ".suncg")
-        
+
     rooms_exist = os.path.isdir(os.path.join(path, "room"))
     houses_exist = os.path.isdir(os.path.join(path, "house"))
     if not os.path.isdir(path) or not rooms_exist or not houses_exist:
@@ -80,11 +89,13 @@ def data_dir():
 
     return path
 
+
 def get_available_houses():
     path = data_dir()
-    print ("DBG: SUNCG path:",path)
+    print ("DBG: SUNCG path:", path)
     houses = os.listdir(os.path.join(path, "house"))
     return sorted(houses)
+
 
 class ModelInformation(object):
     header = 'id,front,nmaterials,minPoint,maxPoint,aligned.dims,index,variantIds'
@@ -638,3 +649,147 @@ class SunCgSceneLoader(object):
                 childNp.setTransform(TransformState.makePos(-centerPos))
                 
         return scene
+
+
+class HouseScoreInformation(object):
+    header = 'sceneId,level,posvote,negvote'
+
+    def __init__(self, filename):
+        self.house_info = {}
+
+        self._parseFromCSV(filename)
+
+    def _parseFromCSV(self, filename):
+        with open(filename, 'r') as f:
+            reader = csv.reader(f, delimiter=',')
+            for i, row in enumerate(reader):
+                if i == 0:
+                    rowStr = ','.join(row)
+                    assert rowStr == HouseScoreInformation.header
+                else:
+                    houseId, level, posvote, negvote = row
+                    level = int(level)
+                    posvote = int(posvote)
+                    negvote = int(negvote)
+
+                    levelScore = float(posvote) / (posvote + negvote)
+
+                    levels = []
+                    if houseId in self.house_info:
+                        levels = self.house_info[houseId]
+                    levels.append((level, levelScore))
+
+                    self.house_info[houseId] = levels
+
+    def getHouseScore(self, houseId):
+        try:
+            levels = self.house_info[houseId]
+            score = np.mean([levelScore for _, levelScore in levels])
+        except KeyError:
+            score = 0.0
+        return score
+
+
+def convert3dModelsToPanda3d(datasetRoot, houseId, eggFormat=True, bamFormat=True, overwrite=False):
+
+    for objFilename in glob.iglob(os.path.join(datasetRoot, 'room/%s/*.obj' % (houseId))):
+
+        cwd = os.path.dirname(objFilename)
+
+        objFilenameNoExt, _ = os.path.splitext(objFilename)
+
+        if eggFormat:
+            eggFilename = objFilenameNoExt + '.egg'
+            if not os.path.exists(eggFilename) or overwrite:
+                obj2egg(objFilename, eggFilename,
+                        coordinateSystem='y-up-right')
+                if not os.path.exists(eggFilename):
+                    logger.warning(
+                        "Could not find output file %s. An error probably occured during conversion." % (eggFilename))
+
+        if bamFormat:
+            bamFilename = objFilenameNoExt + '.bam'
+            if not os.path.exists(bamFilename) or overwrite:
+                # FIXME: the current working directory seems to get messed up when we can the function directly
+                # obj2bam(objFilename, bamFilename,
+                #         coordinateSystem='y-up-right')
+                subprocess.call('egg2bam -ps rel -o %s %s' %
+                                (bamFilename, eggFilename), cwd=cwd, shell=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                if not os.path.exists(bamFilename):
+                    logger.warning(
+                        "Could not find output file %s. An error probably occured during conversion." % (bamFilename))
+
+
+def getSurfaceAreaFromBoundingBox(minBoxPt, maxBoxPt):
+    length = maxBoxPt[0] - minBoxPt[0]
+    width = maxBoxPt[1] - minBoxPt[1]
+    area = length * width
+    return area
+
+
+def filterBlacklist(houseIds, filename):
+
+    # Read selection from JSON file
+    with open(filename, 'r') as f:
+        data = json.load(f)
+
+    # Get the full list of blacklisted house ids
+    blacklistedHouseIds = sum([v for v in six.itervalues(data)], [])
+
+    filteredHouseIds = [
+        houseId for houseId in houseIds if houseId not in blacklistedHouseIds]
+
+    nbFiltered = len(houseIds) - len(filteredHouseIds)
+    percentageFiltered = float(nbFiltered) / len(houseIds) * 100.0
+    logger.info(
+        'Filtered %d houses (%4.2f%%) that have been blacklisted' % (nbFiltered, percentageFiltered))
+
+    return filteredHouseIds
+
+
+def filterRealisticSceneLayout(datasetRoot, houseIds):
+    """
+    NOTE: same criteria as in
+          A. Das, S. Datta, G. Gkioxari, S. Lee, D. Parikh, and D. Batra, “Embodied Question Answering,” 2017.
+    """
+
+    filename = os.path.join(datasetRoot, 'metadata', 'houseAnnoMturk.csv')
+    houseInfo = HouseScoreInformation(filename)
+
+    filteredHouseIds = []
+    for i, houseId in enumerate(houseIds):
+        score = houseInfo.getHouseScore(houseId)
+
+        # Must have been judged realistic (perfect score for all levels)
+        if score == 1.0:
+            filteredHouseIds.append(houseId)
+
+        if (i + 1) % 10000 == 0:
+            logger.debug('Processed %d total houses (%d valid)' %
+                         (i + 1, len(filteredHouseIds)))
+
+    nbFiltered = len(houseIds) - len(filteredHouseIds)
+    percentageFiltered = float(nbFiltered) / len(houseIds) * 100.0
+    logger.info(
+        'Filtered %d houses (%4.2f%%) that do not have a realistic scene layout' % (nbFiltered, percentageFiltered))
+
+    return filteredHouseIds
+
+
+def splitTrainValidTest(ids, trainRatio=0.7, validRatio=0.2, testRatio=0.1):
+
+    # Randomize order
+    random.shuffle(ids)
+
+    assert (trainRatio + validRatio + testRatio) <= 1.0
+    nbTrainSamples = int(trainRatio * len(ids))
+    nbValidSamples = int(validRatio * len(ids))
+    nbTestSamples = len(ids) - (nbTrainSamples + nbValidSamples)
+
+    trainIds = ids[:nbTrainSamples]
+    valIds = ids[nbTrainSamples:nbTrainSamples + nbValidSamples]
+    testIds = ids[-nbTestSamples:]
+    assert len(trainIds) + len(valIds) + len(testIds) == len(ids)
+
+    return trainIds, valIds, testIds
