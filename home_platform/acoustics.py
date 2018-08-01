@@ -1,32 +1,33 @@
 # Copyright (c) 2017, IGLU consortium
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
-# 
-#  - Redistributions of source code must retain the above copyright notice, 
+#
+#  - Redistributions of source code must retain the above copyright notice,
 #    this list of conditions and the following disclaimer.
-#  - Redistributions in binary form must reproduce the above copyright notice, 
-#    this list of conditions and the following disclaimer in the documentation 
+#  - Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#  - Neither the name of the copyright holder nor the names of its contributors 
-#    may be used to endorse or promote products derived from this software 
+#  - Neither the name of the copyright holder nor the names of its contributors
+#    may be used to endorse or promote products derived from this software
 #    without specific prior written permission.
-# 
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
-# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
-# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
-# IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
-# INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT 
-# NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, 
-# OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
-# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+# IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+# INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+# NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+# OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
 import os
 import sys
 import scipy.io
+import scipy.signal
 import logging
 import soundfile as sf
 import numpy as np
@@ -49,7 +50,8 @@ from home_platform.utils import vec3ToNumpyArray
 
 logger = logging.getLogger(__name__)
 
-MODEL_DATA_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "models")
+MODEL_DATA_DIR = os.path.join(os.path.dirname(
+    os.path.realpath(__file__)), "..", "data", "models")
 
 
 def getAcousticPolygonsFromModel(model):
@@ -65,7 +67,7 @@ def getAcousticPolygonsFromModel(model):
 
 
 class HRTF(object):
-    
+
     def __init__(self, nbChannels, samplingRate, maxLength=None):
         self.nbChannels = nbChannels
         self.samplingRate = samplingRate
@@ -104,14 +106,17 @@ class HRTF(object):
             #             except ImportError:
             #                 logger.warn("Using lower quality resampling routine!")
 
-            # TODO: for high-quality resampling, we may simply do linear interpolation (but it is slower)
-            self.impulses = scipy.signal.resample(self.impulses, nbSamples, axis=-1)
+            # TODO: for high-quality resampling, we may simply do linear
+            # interpolation (but it is slower)
+            self.impulses = scipy.signal.resample(
+                self.impulses, nbSamples, axis=-1)
 
         self._precomputeImpulsesFourier()
 
     def getImpulseResponse(self, azimut, elevation):
         closestAzimutIdx = np.argmin(np.sqrt((self.azimuts - azimut) ** 2))
-        closestElevationIdx = np.argmin(np.sqrt((self.elevations - elevation) ** 2))
+        closestElevationIdx = np.argmin(
+            np.sqrt((self.elevations - elevation) ** 2))
         return self.impulses[closestAzimutIdx, closestElevationIdx]
 
     def getFourierImpulseResponse(self, azimut, elevation):
@@ -119,7 +124,8 @@ class HRTF(object):
             self._calculateImpulsesFourier()
 
         closestAzimutIdx = np.argmin(np.sqrt((self.azimuts - azimut) ** 2))
-        closestElevationIdx = np.argmin(np.sqrt((self.elevations - elevation) ** 2))
+        closestElevationIdx = np.argmin(
+            np.sqrt((self.elevations - elevation) ** 2))
         return self.impulsesFourier[closestAzimutIdx, closestElevationIdx]
 
 
@@ -128,48 +134,57 @@ def interauralPolarToVerticalPolarCoordinates(elevations, azimuts):
     elevations = np.atleast_1d(elevations)
     azimuts = np.atleast_1d(azimuts)
 
-    # Convert interaural-polar coordinates to 3D cartesian coordinates on the unit sphere
-    x = np.cos(azimuts*np.pi/180.0) * np.cos(elevations*np.pi/180.0)
-    y = np.sin(azimuts*np.pi/180.0) * -1.0
-    z = np.cos(azimuts*np.pi/180.0) * np.sin(elevations*np.pi/180.0)
+    # Convert interaural-polar coordinates to 3D cartesian coordinates on the
+    # unit sphere
+    x = np.cos(azimuts * np.pi / 180.0) * np.cos(elevations * np.pi / 180.0)
+    y = np.sin(azimuts * np.pi / 180.0) * -1.0
+    z = np.cos(azimuts * np.pi / 180.0) * np.sin(elevations * np.pi / 180.0)
     assert np.allclose(x**2 + y**2 + z**2, np.ones_like(elevations))
-    
-    # Convert 3D cartesian coordinates on the unit sphere to vertical-polar coordinates
-    azimuts = np.arctan2(-y,x)*180.0/np.pi
-    elevations = np.arcsin(z)*180.0/np.pi
-    
+
+    # Convert 3D cartesian coordinates on the unit sphere to vertical-polar
+    # coordinates
+    azimuts = np.arctan2(-y, x) * 180.0 / np.pi
+    elevations = np.arcsin(z) * 180.0 / np.pi
+
     return elevations, azimuts
+
 
 def verticalPolarToInterauralPolarCoordinates(elevation, azimut):
 
-    # Convert vertical-polar coordinates to 3D cartesian coordinates on the unit sphere
-    x = np.cos(elevation*np.pi/180.0) * np.sin(azimut*np.pi/180.0)
-    y = np.cos(elevation*np.pi/180.0) * np.cos(azimut*np.pi/180.0)
-    z = np.sin(elevation*np.pi/180.0) * 1.0
+    # Convert vertical-polar coordinates to 3D cartesian coordinates on the
+    # unit sphere
+    x = np.cos(elevation * np.pi / 180.0) * np.sin(azimut * np.pi / 180.0)
+    y = np.cos(elevation * np.pi / 180.0) * np.cos(azimut * np.pi / 180.0)
+    z = np.sin(elevation * np.pi / 180.0) * 1.0
     assert np.allclose(x**2 + y**2 + z**2, np.ones_like(elevation))
-    
-    # Convert 3D cartesian coordinates on the unit sphere to interaural-polar coordinates
-    azimut = np.arcsin(x)*180.0/np.pi
-    elevation = np.arctan2(z,y)*180.0/np.pi
-    
+
+    # Convert 3D cartesian coordinates on the unit sphere to interaural-polar
+    # coordinates
+    azimut = np.arcsin(x) * 180.0 / np.pi
+    elevation = np.arctan2(z, y) * 180.0 / np.pi
+
     return elevation, azimut
+
 
 def verticalPolarToCipicCoordinates(elevation, azimut):
 
-    elevation, azimut = verticalPolarToInterauralPolarCoordinates(elevation, azimut)
+    elevation, azimut = verticalPolarToInterauralPolarCoordinates(
+        elevation, azimut)
 
     # Find the principal value of an elevation, converting it to the range [90, 270]
-    # See: http://earlab.bu.edu/databases/collections/cipic/documentation/hrir_data_documentation.pdf
-    elevation = np.arctan2(np.sin(elevation*np.pi/180), 
-                       np.cos(elevation*np.pi/180))*180.0/np.pi
-    
+    # See:
+    # http://earlab.bu.edu/databases/collections/cipic/documentation/hrir_data_documentation.pdf
+    elevation = np.arctan2(np.sin(elevation * np.pi / 180),
+                           np.cos(elevation * np.pi / 180)) * 180.0 / np.pi
+
     if isinstance(elevation, np.ndarray):
         elevation[elevation < -90.0] += 360.0
     else:
         if elevation < -90:
             elevation += 360.0
-    
+
     return elevation, azimut
+
 
 class CipicHRTF(HRTF):
     def __init__(self, filename, samplingRate):
@@ -181,9 +196,11 @@ class CipicHRTF(HRTF):
 
         # NOTE: CIPIC defines elevation and azimut angle in a interaural-polar coordinate system.
         #       We actually want to use the vertical-polar coordinate system.
-        # see: http://www.ece.ucdavis.edu/cipic/spatial-sound/tutorial/psychoacoustics-of-spatial-hearing/
+        # see:
+        # http://www.ece.ucdavis.edu/cipic/spatial-sound/tutorial/psychoacoustics-of-spatial-hearing/
         self.elevations = np.linspace(-45, 230.625, num=50) * np.pi / 180
-        self.azimuts = np.concatenate(([-80, -65, -55], np.linspace(-45, 45, num=19), [55, 65, 80])) * np.pi / 180
+        self.azimuts = np.concatenate(
+            ([-80, -65, -55], np.linspace(-45, 45, num=19), [55, 65, 80])) * np.pi / 180
 
         self.impulses = self._loadImpulsesFromFile()
         self.channels = ['left', 'right']
@@ -197,10 +214,11 @@ class CipicHRTF(HRTF):
         cipic = scipy.io.loadmat(self.filename)
         hrirLeft = np.transpose(cipic['hrir_l'], [2, 0, 1])
         hrirRight = np.transpose(cipic['hrir_r'], [2, 0, 1])
-        
+
         # Store impulse responses in time domain
         N = len(hrirLeft[:, 0, 0])
-        impulses = np.zeros((len(self.azimuts), len(self.elevations), self.nbChannels, N))
+        impulses = np.zeros((len(self.azimuts), len(
+            self.elevations), self.nbChannels, N))
         for i in range(len(self.azimuts)):
             for j in range(len(self.elevations)):
                 impulses[i, j, 0, :] = hrirLeft[:, i, j]
@@ -215,6 +233,7 @@ class CipicHRTF(HRTF):
     def getFourierImpulseResponse(self, azimut, elevation):
         elevation, azimut = verticalPolarToCipicCoordinates(elevation, azimut)
         return super(CipicHRTF, self).getFourierImpulseResponse(azimut, elevation)
+
 
 class TextureAbsorptionTable(object):
     textures = {
@@ -257,25 +276,29 @@ class TextureAbsorptionTable(object):
             else:
                 # Remove any digits
                 if (sys.version_info > (3, 0)):
-                    texture = texture.translate({ord(c): '' for c in "1234567890"})
+                    texture = texture.translate(
+                        {ord(c): '' for c in "1234567890"})
                 else:
                     texture = texture.translate(None, digits)
 
                 # Remove trailing underscores
                 texture = texture.rstrip("_")
 
-                # NOTE: handle many variations of textile and wood in SUNCG texture names
+                # NOTE: handle many variations of textile and wood in SUNCG
+                # texture names
                 if "textile" in texture:
                     texture = "textile"
                 if "wood" in texture:
                     texture = "wood"
 
-            if not texture in TextureAbsorptionTable.textures:
-                logger.warn('Unsupported texture basename for material acoustics: %s' % (texture))
+            if texture not in TextureAbsorptionTable.textures:
+                logger.warn(
+                    'Unsupported texture basename for material acoustics: %s' % (texture))
                 texture = 'default'
 
             category, material = TextureAbsorptionTable.textures[texture]
-            coefficients, _ = MaterialAbsorptionTable.getAbsorptionCoefficients(category, material, units='normalized')
+            coefficients, _ = MaterialAbsorptionTable.getAbsorptionCoefficients(
+                category, material, units='normalized')
             totalCoefficients += area * coefficients
 
         if units == 'dB':
@@ -299,16 +322,20 @@ class MaterialAbsorptionTable(object):
                   'ceiling absorbers', 'special absorbers']
     frequencies = [125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0]
 
-    materials = [[  # Massive constructions and hard surfaces 
-        "average",  # Walls, hard surfaces average (brick walls, plaster, hard floors, etc.)
+    materials = [[  # Massive constructions and hard surfaces
+        # Walls, hard surfaces average (brick walls, plaster, hard floors,
+        # etc.)
+        "average",
         "walls rendered brickwork",  # Walls, rendered brickwork
         "rough concrete",  # Rough concrete
         "smooth unpainted concrete",  # Smooth unpainted concrete
         "rough lime wash",  # Rough lime wash
-        "smooth brickwork with flush pointing, painted",  # Smooth brickwork with flush pointing, painted
+        # Smooth brickwork with flush pointing, painted
+        "smooth brickwork with flush pointing, painted",
         "smooth brickwork, 10 mm deep pointing, pit sand mortar",
         # Smooth brickwork, 10 mm deep pointing, pit sand mortar
-        "brick wall, stuccoed with a rough finish",  # Brick wall, stuccoed with a rough finish
+        # Brick wall, stuccoed with a rough finish
+        "brick wall, stuccoed with a rough finish",
         "ceramic tiles with a smooth surface",  # Ceramic tiles with a smooth surface
         "limestone walls",  # Limestone walls
         "reverberation chamber walls",  # Reverberation chamber walls
@@ -317,9 +344,10 @@ class MaterialAbsorptionTable(object):
     ],
         [  # Lightweight constructions and linings
             "plasterboard on steel frame",
-            # 2 * 13 mm plasterboard on steel frame, 50 mm mineral wool in cavity, surface painted
+            # 2 * 13 mm plasterboard on steel frame, 50 mm mineral wool in
+            # cavity, surface painted
             "wooden lining",  # Wooden lining, 12 mm fixed on frame
-        ],
+    ],
         [  # Glazing
             "single pane of glass",  # Single pane of glass, 3 mm
             "glass window",  # Glass window, 0.68 kg/m^2
@@ -327,7 +355,7 @@ class MaterialAbsorptionTable(object):
             "double glazing, 30 mm gap",  # Double glazing, 2-3 mm glass,  > 30 mm gap
             "double glazing, 10 mm gap ",  # Double glazing, 2-3 mm glass,  10 mm gap
             "double glazing, lead on the inside",  # Double glazing, lead on the inside
-        ],
+    ],
         [  # Wood
             "wood, 1.6 cm thick",  # Wood, 1.6 cm thick,  on 4 cm wooden planks
             "thin plywood panelling",  # Thin plywood panelling
@@ -335,128 +363,176 @@ class MaterialAbsorptionTable(object):
             "audience floor",  # Audience floor, 2 layers,  33 mm on sleepers over concrete
             "stage floor",  # Wood, stage floor, 2 layers, 27 mm over airspace
             "solid wooden door",  # Solid wooden door
-        ],
+    ],
         [  # Floor coverings
             "linoleum, asphalt, rubber, or cork tile on concrete",
             # Linoleum, asphalt, rubber, or cork tile on concrete
             "cotton carpet",  # Cotton carpet
             "loop pile tufted carpet",
-            # Loop pile tufted carpet, 1.4 kg/m^2, 9.5 mm pile height: On hair pad, 3.0kg/m^2
+            # Loop pile tufted carpet, 1.4 kg/m^2, 9.5 mm pile height: On hair
+            # pad, 3.0kg/m^2
             "thin carpet",  # Thin carpet, cemented to concrete
-            "pile carpet bonded to closed-cell foam underlay",  # 6 mm pile carpet bonded to closed-cell foam underlay
-            "pile carpet bonded to open-cell foam underlay",  # 6 mm pile carpet bonded to open-cell foam underlay
+            # 6 mm pile carpet bonded to closed-cell foam underlay
+            "pile carpet bonded to closed-cell foam underlay",
+            # 6 mm pile carpet bonded to open-cell foam underlay
+            "pile carpet bonded to open-cell foam underlay",
             "tufted pile carpet",  # 9 mm tufted pile carpet on felt underlay
             "needle felt",  # Needle felt 5 mm stuck to concrete
             "soft carpet",  # 10 mm soft carpet on concrete
             "hairy carpet",  # Hairy carpet on 3 mm felt
             "rubber carpet",  # 5 mm rubber carpet on concrete
-            "carpet on hair felt or foam rubber",  # Carpet 1.35 kg/m^2, on hair felt or foam rubber
+            # Carpet 1.35 kg/m^2, on hair felt or foam rubber
+            "carpet on hair felt or foam rubber",
             "cocos fibre roll felt",
-            # Cocos fibre roll felt, 29 mm thick (unstressed), reverse side clad  with paper, 2.2kg/m^2, 2 Rayl
-        ],
+            # Cocos fibre roll felt, 29 mm thick (unstressed), reverse side
+            # clad  with paper, 2.2kg/m^2, 2 Rayl
+    ],
         [  # Curtains
-            "cotton curtains",  # Cotton curtains (0.5 kg/m^2) draped to 3/4 area approx. 130 mm from wall
+            # Cotton curtains (0.5 kg/m^2) draped to 3/4 area approx. 130 mm
+            # from wall
+            "cotton curtains",
             "curtains",  # Curtains (0.2 kg/m^2) hung 90 mm from wall
             "cotton cloth",  # Cotton cloth (0.33 kg/m^2) folded to 7/8 area
             "densely woven window curtains",  # Densely woven window curtains 90 mm from wall
-            "vertical blinds, half opened",  # Vertical blinds, 15 cm from wall,   half opened (45 deg)
-            "vertical blinds, open",  # Vertical blinds, 15 cm from wall,   open (90 deg)
+            # Vertical blinds, 15 cm from wall,   half opened (45 deg)
+            "vertical blinds, half opened",
+            # Vertical blinds, 15 cm from wall,   open (90 deg)
+            "vertical blinds, open",
             "tight velvet curtains",  # Tight velvet curtains
             "curtain fabric",  # Curtain fabric, 15 cm from wall
             "curtain fabric, folded",  # Curtain fabric, folded, 15 cm from wall
-            "curtain of close-woven glass mat",  # Curtains of close-woven glass mat   hung 50 mm from wall
+            # Curtains of close-woven glass mat   hung 50 mm from wall
+            "curtain of close-woven glass mat",
             "studio curtain",  # Studio curtains, 22 cm from wall
-        ],
+    ],
         [  # Wall absorbers
             # TODO: fill table from paper
-        ],
+    ],
         [  # Ceiling absorbers
             # TODO: fill table from paper
-        ],
+    ],
         [  # Special absorbers
             # TODO: fill table from paper
-        ],
+    ],
     ]
 
     # Tables of random-incidence absorption coefficients
     table = [[  # Massive constructions and hard surfaces
         [0.02, 0.02, 0.03, 0.03, 0.04, 0.05, 0.05],
-        # Walls, hard surfaces average (brick walls, plaster, hard floors, etc.)
+        # Walls, hard surfaces average (brick walls, plaster, hard floors,
+        # etc.)
         [0.01, 0.02, 0.02, 0.03, 0.03, 0.04, 0.04],  # Walls, rendered brickwork
         [0.02, 0.03, 0.03, 0.03, 0.04, 0.07, 0.07],  # Rough concrete
         [0.01, 0.01, 0.02, 0.02, 0.02, 0.05, 0.05],  # Smooth unpainted concrete
         [0.02, 0.03, 0.04, 0.05, 0.04, 0.03, 0.02],  # Rough lime wash
-        [0.01, 0.01, 0.02, 0.02, 0.02, 0.02, 0.02],  # Smooth brickwork with flush pointing, painted
-        [0.08, 0.09, 0.12, 0.16, 0.22, 0.24, 0.24],  # Smooth brickwork, 10 mm deep pointing, pit sand mortar
-        [0.03, 0.03, 0.03, 0.04, 0.05, 0.07, 0.07],  # Brick wall, stuccoed with a rough finish
-        [0.01, 0.01, 0.01, 0.02, 0.02, 0.02, 0.02],  # Ceramic tiles with a smooth surface
+        # Smooth brickwork with flush pointing, painted
+        [0.01, 0.01, 0.02, 0.02, 0.02, 0.02, 0.02],
+        # Smooth brickwork, 10 mm deep pointing, pit sand mortar
+        [0.08, 0.09, 0.12, 0.16, 0.22, 0.24, 0.24],
+        # Brick wall, stuccoed with a rough finish
+        [0.03, 0.03, 0.03, 0.04, 0.05, 0.07, 0.07],
+        # Ceramic tiles with a smooth surface
+        [0.01, 0.01, 0.01, 0.02, 0.02, 0.02, 0.02],
         [0.02, 0.02, 0.03, 0.04, 0.05, 0.05, 0.05],  # Limestone walls
-        [0.01, 0.01, 0.01, 0.02, 0.02, 0.04, 0.04],  # Reverberation chamber walls
+        # Reverberation chamber walls
+        [0.01, 0.01, 0.01, 0.02, 0.02, 0.04, 0.04],
         [0.01, 0.03, 0.05, 0.02, 0.02, 0.02, 0.02],  # Concrete floor
         [0.01, 0.01, 0.01, 0.02, 0.02, 0.02, 0.02],  # Marble floor
     ],
         [  # Lightweight constructions and linings
             [0.15, 0.10, 0.06, 0.04, 0.04, 0.05, 0.05],
-            # 2 * 13 mm plasterboard on steel frame, 50 mm mineral wool in cavity, surface painted
-            [0.27, 0.23, 0.22, 0.15, 0.10, 0.07, 0.06],  # Wooden lining, 12 mm fixed on frame
-        ],
+            # 2 * 13 mm plasterboard on steel frame, 50 mm mineral wool in
+            # cavity, surface painted
+            # Wooden lining, 12 mm fixed on frame
+            [0.27, 0.23, 0.22, 0.15, 0.10, 0.07, 0.06],
+    ],
         [  # Glazing
             [0.08, 0.04, 0.03, 0.03, 0.02, 0.02, 0.02],
             # Single pane of glass, 3 mm
-            [0.10, 0.05, 0.04, 0.03, 0.03, 0.03, 0.03],  # Glass window,, 0.68 kg/m^2
+            # Glass window,, 0.68 kg/m^2
+            [0.10, 0.05, 0.04, 0.03, 0.03, 0.03, 0.03],
             [0.30, 0.20, 0.14, 0.10, 0.05, 0.05, 0.05],  # Lead glazing
-            [0.15, 0.05, 0.03, 0.03, 0.02, 0.02, 0.02],  # Double glazing, 2-3 mm glass,  > 30 mm gap
-            [0.10, 0.07, 0.05, 0.03, 0.02, 0.02, 0.02],  # Double glazing, 2-3 mm glass,  10 mm gap
-            [0.15, 0.30, 0.18, 0.10, 0.05, 0.05, 0.05],  # Double glazing, lead on the inside
-        ],
+            # Double glazing, 2-3 mm glass,  > 30 mm gap
+            [0.15, 0.05, 0.03, 0.03, 0.02, 0.02, 0.02],
+            # Double glazing, 2-3 mm glass,  10 mm gap
+            [0.10, 0.07, 0.05, 0.03, 0.02, 0.02, 0.02],
+            # Double glazing, lead on the inside
+            [0.15, 0.30, 0.18, 0.10, 0.05, 0.05, 0.05],
+    ],
         [  # Wood
-            [0.18, 0.12, 0.10, 0.09, 0.08, 0.07, 0.07],  # Wood, 1.6 cm thick,  on 4 cm wooden planks
+            # Wood, 1.6 cm thick,  on 4 cm wooden planks
+            [0.18, 0.12, 0.10, 0.09, 0.08, 0.07, 0.07],
             [0.42, 0.21, 0.10, 0.08, 0.06, 0.06, 0.06],  # Thin plywood panelling
-            [0.18, 0.12, 0.10, 0.09, 0.08, 0.07, 0.07],  # 16 mm wood on 40 mm studs
-            [0.09, 0.06, 0.05, 0.05, 0.05, 0.04, 0.04],  # Audience floor, 2 layers,  33 mm on sleepers over concrete
-            [0.10, 0.07, 0.06, 0.06, 0.06, 0.06, 0.06],  # Wood, stage floor, 2 layers, 27 mm over airspace
+            # 16 mm wood on 40 mm studs
+            [0.18, 0.12, 0.10, 0.09, 0.08, 0.07, 0.07],
+            # Audience floor, 2 layers,  33 mm on sleepers over concrete
+            [0.09, 0.06, 0.05, 0.05, 0.05, 0.04, 0.04],
+            # Wood, stage floor, 2 layers, 27 mm over airspace
+            [0.10, 0.07, 0.06, 0.06, 0.06, 0.06, 0.06],
             [0.14, 0.10, 0.06, 0.08, 0.10, 0.10, 0.10],  # Solid wooden door
-        ],
+    ],
         [  # Floor coverings
-            [0.02, 0.03, 0.03, 0.03, 0.03, 0.02, 0.02],  # Linoleum, asphalt, rubber, or cork tile on concrete
+            # Linoleum, asphalt, rubber, or cork tile on concrete
+            [0.02, 0.03, 0.03, 0.03, 0.03, 0.02, 0.02],
             [0.07, 0.31, 0.49, 0.81, 0.66, 0.54, 0.48],  # Cotton carpet
             [0.10, 0.40, 0.62, 0.70, 0.63, 0.88, 0.88],
-            # Loop pile tufted carpet, 1.4 kg/m^2, 9.5 mm pile height: On hair pad, 3.0kg/m^2
-            [0.02, 0.04, 0.08, 0.20, 0.35, 0.40, 0.40],  # Thin carpet, cemented to concrete
-            [0.03, 0.09, 0.25, 0.31, 0.33, 0.44, 0.44],  # 6 mm pile carpet bonded to closed-cell foam underlay
-            [0.03, 0.09, 0.20, 0.54, 0.70, 0.72, 0.72],  # 6 mm pile carpet bonded to open-cell foam underlay
-            [0.08, 0.08, 0.30, 0.60, 0.75, 0.80, 0.80],  # 9 mm tufted pile carpet on felt underlay
-            [0.02, 0.02, 0.05, 0.15, 0.30, 0.40, 0.40],  # Needle felt 5 mm stuck to concrete
-            [0.09, 0.08, 0.21, 0.26, 0.27, 0.37, 0.37],  # 10 mm soft carpet on concrete
-            [0.11, 0.14, 0.37, 0.43, 0.27, 0.25, 0.25],  # Hairy carpet on 3 mm felt
-            [0.04, 0.04, 0.08, 0.12, 0.10, 0.10, 0.10],  # 5 mm rubber carpet on concrete
-            [0.08, 0.24, 0.57, 0.69, 0.71, 0.73, 0.73],  # Carpet 1.35 kg/m^2, on hair felt or foam rubber
+            # Loop pile tufted carpet, 1.4 kg/m^2, 9.5 mm pile height: On hair
+            # pad, 3.0kg/m^2
+            # Thin carpet, cemented to concrete
+            [0.02, 0.04, 0.08, 0.20, 0.35, 0.40, 0.40],
+            # 6 mm pile carpet bonded to closed-cell foam underlay
+            [0.03, 0.09, 0.25, 0.31, 0.33, 0.44, 0.44],
+            # 6 mm pile carpet bonded to open-cell foam underlay
+            [0.03, 0.09, 0.20, 0.54, 0.70, 0.72, 0.72],
+            # 9 mm tufted pile carpet on felt underlay
+            [0.08, 0.08, 0.30, 0.60, 0.75, 0.80, 0.80],
+            # Needle felt 5 mm stuck to concrete
+            [0.02, 0.02, 0.05, 0.15, 0.30, 0.40, 0.40],
+            # 10 mm soft carpet on concrete
+            [0.09, 0.08, 0.21, 0.26, 0.27, 0.37, 0.37],
+            # Hairy carpet on 3 mm felt
+            [0.11, 0.14, 0.37, 0.43, 0.27, 0.25, 0.25],
+            # 5 mm rubber carpet on concrete
+            [0.04, 0.04, 0.08, 0.12, 0.10, 0.10, 0.10],
+            # Carpet 1.35 kg/m^2, on hair felt or foam rubber
+            [0.08, 0.24, 0.57, 0.69, 0.71, 0.73, 0.73],
             [0.10, 0.13, 0.22, 0.35, 0.47, 0.57, 0.57],
-            # Cocos fibre roll felt, 29 mm thick (unstressed), reverse side clad  with paper, 2.2kg/m^2, 2 Rayl
-        ],
+            # Cocos fibre roll felt, 29 mm thick (unstressed), reverse side
+            # clad  with paper, 2.2kg/m^2, 2 Rayl
+    ],
         [  # Curtains
             [0.30, 0.45, 0.65, 0.56, 0.59, 0.71, 0.71],
-            # Cotton curtains (0.5 kg/m^2) draped to 3/4 area approx. 130 mm from wall
-            [0.05, 0.06, 0.39, 0.63, 0.70, 0.73, 0.73],  # Curtains (0.2 kg/m^2) hung 90 mm from wall
-            [0.03, 0.12, 0.15, 0.27, 0.37, 0.42, 0.42],  # Cotton cloth (0.33 kg/m^2) folded to 7/8 area
-            [0.06, 0.10, 0.38, 0.63, 0.70, 0.73, 0.73],  # Densely woven window curtains 90 mm from wall
-            [0.03, 0.09, 0.24, 0.46, 0.79, 0.76, 0.76],  # Vertical blinds, 15 cm from wall,   half opened (45 deg)
-            [0.03, 0.06, 0.13, 0.28, 0.49, 0.56, 0.56],  # Vertical blinds, 15 cm from wall,   open (90 deg)
+            # Cotton curtains (0.5 kg/m^2) draped to 3/4 area approx. 130 mm
+            # from wall
+            # Curtains (0.2 kg/m^2) hung 90 mm from wall
+            [0.05, 0.06, 0.39, 0.63, 0.70, 0.73, 0.73],
+            # Cotton cloth (0.33 kg/m^2) folded to 7/8 area
+            [0.03, 0.12, 0.15, 0.27, 0.37, 0.42, 0.42],
+            # Densely woven window curtains 90 mm from wall
+            [0.06, 0.10, 0.38, 0.63, 0.70, 0.73, 0.73],
+            # Vertical blinds, 15 cm from wall,   half opened (45 deg)
+            [0.03, 0.09, 0.24, 0.46, 0.79, 0.76, 0.76],
+            # Vertical blinds, 15 cm from wall,   open (90 deg)
+            [0.03, 0.06, 0.13, 0.28, 0.49, 0.56, 0.56],
             [0.05, 0.12, 0.35, 0.45, 0.38, 0.36, 0.36],  # Tight velvet curtains
-            [0.10, 0.38, 0.63, 0.52, 0.55, 0.65, 0.65],  # Curtain fabric, 15 cm from wall
-            [0.12, 0.60, 0.98, 1.00, 1.00, 1.00, 1.00],  # Curtain fabric, folded, 15 cm from wall
-            [0.03, 0.03, 0.15, 0.40, 0.50, 0.50, 0.50],  # Curtains of close-woven glass mat   hung 50 mm from wall
-            [0.36, 0.26, 0.51, 0.45, 0.62, 0.76, 0.76],  # Studio curtains, 22 cm from wall
-        ],
+            # Curtain fabric, 15 cm from wall
+            [0.10, 0.38, 0.63, 0.52, 0.55, 0.65, 0.65],
+            # Curtain fabric, folded, 15 cm from wall
+            [0.12, 0.60, 0.98, 1.00, 1.00, 1.00, 1.00],
+            # Curtains of close-woven glass mat   hung 50 mm from wall
+            [0.03, 0.03, 0.15, 0.40, 0.50, 0.50, 0.50],
+            # Studio curtains, 22 cm from wall
+            [0.36, 0.26, 0.51, 0.45, 0.62, 0.76, 0.76],
+    ],
         [  # Wall absorbers
             # TODO: fill table from paper
-        ],
+    ],
         [  # Ceiling absorbers
             # TODO: fill table from paper
-        ],
+    ],
         [  # Special absorbers
             # TODO: fill table from paper
-        ],
+    ],
     ]
 
     @staticmethod
@@ -464,15 +540,19 @@ class MaterialAbsorptionTable(object):
 
         category = category.lower().strip()
         if category not in MaterialAbsorptionTable.categories:
-            raise Exception('Unknown category for material absorption table: %s' % (category))
+            raise Exception(
+                'Unknown category for material absorption table: %s' % (category))
         categoryIdx = MaterialAbsorptionTable.categories.index(category)
 
         material = material.lower().strip()
         if material not in MaterialAbsorptionTable.materials[categoryIdx]:
-            raise Exception('Unknown material for category %s in material absorption table: %s' % (category, material))
-        materialIdx = MaterialAbsorptionTable.materials[categoryIdx].index(material)
+            raise Exception('Unknown material for category %s in material absorption table: %s' % (
+                category, material))
+        materialIdx = MaterialAbsorptionTable.materials[categoryIdx].index(
+            material)
 
-        coefficients = np.array(MaterialAbsorptionTable.table[categoryIdx][materialIdx])
+        coefficients = np.array(
+            MaterialAbsorptionTable.table[categoryIdx][materialIdx])
         frequencies = np.array(AirAttenuationTable.frequencies)
 
         if units == 'dB':
@@ -488,13 +568,14 @@ class MaterialAbsorptionTable(object):
 
 
 class AirAttenuationTable(object):
-    # From: Auralization : fundamentals of acoustics, modelling, simulation, algorithms and acoustic virtual reality
+    # From: Auralization : fundamentals of acoustics, modelling, simulation,
+    # algorithms and acoustic virtual reality
 
     temperatures = [10.0, 20.0]
     relativeHumidities = [40.0, 60.0, 80.0]
     frequencies = [125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0]
 
-    # Air attenuation coefficient, in 10^-3 / m 
+    # Air attenuation coefficient, in 10^-3 / m
     table = [[  # 10 deg C
         [0.1, 0.2, 0.5, 1.1, 2.7, 9.4, 29.0],  # 30-50% hum
         [0.1, 0.2, 0.5, 0.8, 1.8, 5.9, 21.1],  # 50-70% hum
@@ -504,16 +585,18 @@ class AirAttenuationTable(object):
             [0.1, 0.3, 0.6, 1.0, 1.9, 5.8, 20.3],  # 30-50% hum
             [0.1, 0.3, 0.6, 1.0, 1.7, 4.1, 13.5],  # 50-70% hum
             [0.1, 0.3, 0.6, 1.1, 1.7, 3.5, 10.6],  # 70-90% hum
-        ]
+    ]
     ]
 
     @staticmethod
     def getAttenuations(distance, temperature, relativeHumidity, units='dB'):
-        closestTemperatureIdx = np.argmin(np.sqrt((np.array(AirAttenuationTable.temperatures) - temperature) ** 2))
+        closestTemperatureIdx = np.argmin(
+            np.sqrt((np.array(AirAttenuationTable.temperatures) - temperature) ** 2))
         closestHumidityIdx = np.argmin(
             np.sqrt((np.array(AirAttenuationTable.relativeHumidities) - relativeHumidity) ** 2))
 
-        attenuations = np.array(AirAttenuationTable.table[closestTemperatureIdx][closestHumidityIdx])
+        attenuations = np.array(
+            AirAttenuationTable.table[closestTemperatureIdx][closestHumidityIdx])
         frequencies = np.array(AirAttenuationTable.frequencies)
 
         eps = np.finfo(np.float).eps
@@ -537,7 +620,8 @@ class FilterBank(object):
 
         if n % 2 == 0:
             self.n = n + 1
-            logger.warn('Length of the FIR filter adjusted to the next odd number to ensure symmetry: %d' % (self.n))
+            logger.warn(
+                'Length of the FIR filter adjusted to the next odd number to ensure symmetry: %d' % (self.n))
         else:
             self.n = n
 
@@ -556,10 +640,12 @@ class FilterBank(object):
                 b = signal.firwin(self.n, cutoff=cutoffs[0], window='hamming')
             elif i == len(centerFrequencies) - 1:
                 # High-pass filter
-                b = signal.firwin(self.n, cutoff=cutoffs[-1], window='hamming', pass_zero=False)
+                b = signal.firwin(
+                    self.n, cutoff=cutoffs[-1], window='hamming', pass_zero=False)
             else:
                 # Band-pass filter
-                b = signal.firwin(self.n, [cutoffs[i - 1], cutoffs[i]], pass_zero=False)
+                b = signal.firwin(
+                    self.n, [cutoffs[i - 1], cutoffs[i]], pass_zero=False)
 
             filters.append(b)
         self.filters = np.array(filters)
@@ -640,12 +726,14 @@ def getIntersectionPointsFromPath(path):
                                 (epts[i - 1].z - epts[i].z) ** 2)
 
             # Skip duplicated points
-            # TODO: we may not need to check for duplicates in geometry, as this was due to another bug
+            # TODO: we may not need to check for duplicates in geometry, as
+            # this was due to another bug
             if segLength == 0.0:
                 continue
 
         # NOTE: EVERT works in milimeter units
-        pts.append(LVector3f(epts[i].x / 1000.0, epts[i].y / 1000.0, epts[i].z / 1000.0))
+        pts.append(LVector3f(epts[i].x / 1000.0,
+                             epts[i].y / 1000.0, epts[i].z / 1000.0))
     return pts
 
 
@@ -658,7 +746,8 @@ def getIntersectedMaterialIdsFromPath(path):
                             (lastPt.z - pt.z) ** 2)
 
         # Skip duplicated points
-        # TODO: we may not need to check for duplicates in geometry, as this was due to another bug
+        # TODO: we may not need to check for duplicates in geometry, as this
+        # was due to another bug
         if segLength == 0.0:
             continue
 
@@ -675,14 +764,16 @@ def getIntersectedMaterialIdsFromPath(path):
 
 # Moller-Trumbore ray-triangle intersection algorithm vectorized with Numpy
 # Adapted from: https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
-# See also: https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/moller-trumbore-ray-triangle-intersection
+# See also:
+# https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/moller-trumbore-ray-triangle-intersection
 def rayIntersectsTriangles(startPt, endPt, triangles, eps=1e-3):
     mask = np.ones((triangles.shape[0],), dtype=np.bool)
 
     d = np.linalg.norm((endPt - startPt), 2)
     vdir = (endPt - startPt) / d
 
-    vertex0, vertex1, vertex2 = triangles[:, 0, :], triangles[:, 1, :], triangles[:, 2, :]
+    vertex0, vertex1, vertex2 = triangles[:, 0,
+                                          :], triangles[:, 1, :], triangles[:, 2, :]
     edge1 = vertex1 - vertex0
     edge2 = vertex2 - vertex0
 
@@ -699,7 +790,8 @@ def rayIntersectsTriangles(startPt, endPt, triangles, eps=1e-3):
     v = f * np.einsum('ij,ij->i', vdir[np.newaxis, :], q)
     mask &= np.logical_not((v < 0.0) | (u + v > 1.0))
 
-    # NOTE: t is the distance from the start point to the intersection on the plane defined by the triangle
+    # NOTE: t is the distance from the start point to the intersection on the
+    # plane defined by the triangle
     t = f * np.einsum('ij,ij->i', edge2, q)
     mask &= (t > eps)
     mask &= np.logical_not(np.isclose(t, d[np.newaxis], atol=eps))
@@ -742,7 +834,8 @@ def getAcousticModelNodeForModel(model, mode='box'):
 
         acousticModel = loadModel(os.path.join(MODEL_DATA_DIR, 'cube.egg'))
 
-        # Rescale the cube model to match the bounding box of the original model
+        # Rescale the cube model to match the bounding box of the original
+        # model
         minBounds, maxBounds = acousticModel.getTightBounds()
         dims = maxBounds - minBounds
         pos = acousticModel.getPos()
@@ -750,13 +843,16 @@ def getAcousticModelNodeForModel(model, mode='box'):
         deltaCenter = center - pos
 
         position = refPos + refDeltaCenter - deltaCenter
-        scale = LVector3f(refDims.x / dims.x, refDims.y / dims.y, refDims.z / dims.z)
-        transform = TransformState.makePos(position).compose(TransformState.makeScale(scale))
+        scale = LVector3f(refDims.x / dims.x, refDims.y /
+                          dims.y, refDims.z / dims.z)
+        transform = TransformState.makePos(position).compose(
+            TransformState.makeScale(scale))
 
         # TODO: validate applied transform here
 
     else:
-        raise Exception('Unknown mode type for acoustic object shape: %s' % (mode))
+        raise Exception(
+            'Unknown mode type for acoustic object shape: %s' % (mode))
 
     acousticModel.setName(model.getName())
     acousticModel.setTransform(acousticModel.getTransform().compose(transform))
@@ -774,7 +870,8 @@ class AcousticImpulseResponse(object):
 
 
 class EvertAcoustics(World):
-    # NOTE: the model ids of objects that correspond to opened doors. They will be ignored in the acoustic scene.
+    # NOTE: the model ids of objects that correspond to opened doors. They
+    # will be ignored in the acoustic scene.
     openedDoorModelIds = [
         # Doors
         '122', '133', '214', '246', '247', '361', '73', '756', '757', '758', '759', '760',
@@ -826,7 +923,7 @@ class EvertAcoustics(World):
         self.srcBuffers = dict()
         self.outBuffers = dict()
         self.ambientSounds = []
-        
+
         self.filterbank = FilterBank(n=257,
                                      centerFrequencies=MaterialAbsorptionTable.frequencies,
                                      samplingRate=samplingRate)
@@ -849,7 +946,7 @@ class EvertAcoustics(World):
         self.scene.worlds['acoustics'] = self
 
         self.lastTaskTime = 0.0
-        #taskMgr.add(self.update, 'acoustics', sort=0)
+        # taskMgr.add(self.update, 'acoustics', sort=0)
 
     def showRoomLayout(self, showCeilings=True, showWalls=True, showFloors=True):
 
@@ -858,13 +955,13 @@ class EvertAcoustics(World):
                 np.show(self.cameraMask)
             else:
                 np.hide(BitMask32.allOn())
-    
+
         for np in self.scene.scene.findAllMatches('**/layouts/**/acoustics/*w'):
             if showWalls:
                 np.show(self.cameraMask)
             else:
                 np.hide(BitMask32.allOn())
-            
+
         for np in self.scene.scene.findAllMatches('**/layouts/**/acoustics/*f'):
             if showFloors:
                 np.show(self.cameraMask)
@@ -892,7 +989,8 @@ class EvertAcoustics(World):
 
         model = loadModel(os.path.join(MODEL_DATA_DIR, 'sphere.egg'))
 
-        # Rescale the cube model to match the bounding box of the original model
+        # Rescale the cube model to match the bounding box of the original
+        # model
         minBounds, maxBounds = model.getTightBounds()
         dims = maxBounds - minBounds
         pos = model.getPos()
@@ -950,12 +1048,14 @@ class EvertAcoustics(World):
             distanceAttenuations = 0.0
 
         # Calculat material attenuation (dB)
-        materialAttenuations = np.zeros((len(MaterialAbsorptionTable.frequencies),))
+        materialAttenuations = np.zeros(
+            (len(MaterialAbsorptionTable.frequencies),))
         if self.materialAbsorption:
             for materialId in getIntersectedMaterialIdsFromPath(path):
                 materialAbsorption = self.coefficientsForMaterialId[materialId]
                 eps = np.finfo(np.float).eps
-                materialAbsorptionDb = 20.0 * np.log10(1.0 - materialAbsorption + eps)
+                materialAbsorptionDb = 20.0 * \
+                    np.log10(1.0 - materialAbsorption + eps)
                 materialAttenuations += materialAbsorptionDb
 
         # Total attenuation (dB)
@@ -969,7 +1069,8 @@ class EvertAcoustics(World):
         self.rays = []
         self.nbUsedRays = 0
 
-        # Load cylinder model and calculate the scaling factor to make the model unit-norm over the Z axis
+        # Load cylinder model and calculate the scaling factor to make the
+        # model unit-norm over the Z axis
         model = loadModel(os.path.join(MODEL_DATA_DIR, 'cylinder.egg'))
         minBounds, maxBounds = model.getTightBounds()
         dims = maxBounds - minBounds
@@ -1013,7 +1114,7 @@ class EvertAcoustics(World):
 
         # Change orientation by calculating rotation angles from the endpoints
         # NOTE: H angle is how the model rotates around the (0, 0, 1) axis,
-        #       P angle how much it rotates around the (1, 0, 0) axis, 
+        #       P angle how much it rotates around the (1, 0, 0) axis,
         #       R angle how much it rotates around the (0, 1, 0) axis.
         normVec = (endPt - startPt) / refLength
 
@@ -1062,7 +1163,8 @@ class EvertAcoustics(World):
             # Calculate spherical geometric spreading attenuation (dB)
             distanceAttenuations = 20.0 * np.log10(1.0 / cumLength)
 
-            totalSegAttenuations[i] = np.mean(airAttenuations) + distanceAttenuations
+            totalSegAttenuations[i] = np.mean(
+                airAttenuations) + distanceAttenuations
 
             lastPt = pt
 
@@ -1071,7 +1173,8 @@ class EvertAcoustics(World):
             for i, materialId in enumerate(getIntersectedMaterialIdsFromPath(path)):
                 materialAbsorption = self.coefficientsForMaterialId[materialId]
                 eps = np.finfo(np.float).eps
-                materialAbsorptionDb = 20.0 * np.log10(1.0 - materialAbsorption + eps)
+                materialAbsorptionDb = 20.0 * \
+                    np.log10(1.0 - materialAbsorption + eps)
                 totalSegAttenuations[i + 1:] += np.mean(materialAbsorptionDb)
 
         # assert np.all(totalSegAttenuations < 0.0)
@@ -1088,16 +1191,19 @@ class EvertAcoustics(World):
 
             coefficient = 10.0 ** (attenuationDb / 20.0)
             # assert coefficient >= 0.0 and coefficient <= 1.0
-            radius = np.clip(self.maxRayRadius * coefficient, a_min=self.minRayRadius, a_max=self.maxRayRadius)
+            radius = np.clip(self.maxRayRadius * coefficient,
+                             a_min=self.minRayRadius, a_max=self.maxRayRadius)
 
             if self.nbUsedRays < len(self.rays):
                 model = self.rays[self.nbUsedRays]
-                self._updateRayModelFromEndpoints(model, startPt, endPt, radius, color)
+                self._updateRayModelFromEndpoints(
+                    model, startPt, endPt, radius, color)
                 model.show(self.cameraMask)
                 self.nbUsedRays += 1
             else:
                 nextSize = 2 * len(self.rays)
-                logger.debug('Ray cache is full: increasing the size from %d to %d' % (len(self.rays), nextSize))
+                logger.debug('Ray cache is full: increasing the size from %d to %d' % (
+                    len(self.rays), nextSize))
                 self._resizeRayCache(nextSize)
 
             startPt = endPt
@@ -1115,11 +1221,11 @@ class EvertAcoustics(World):
             # Loop for all sounds
             if agent.getName() in self.solutions:
                 for solution, _, _ in self.solutions[agent.getName()]:
-            
+
                     # Rotate amongst colors of the predefined table
                     color = self.rayColors[i % len(self.rayColors)]
                     i += 1
-                    
+
                     # Sort by increasing path lengh
                     paths = []
                     for n in range(solution.numPaths()):
@@ -1128,8 +1234,9 @@ class EvertAcoustics(World):
                         paths.append((pathLength, path))
                     paths.sort(key=lambda x: x[0])
                     paths = [path for _, path in paths]
-                    logger.debug('Number of paths found for solution %d: %d' % (i, solution.numPaths()))
-        
+                    logger.debug('Number of paths found for solution %d: %d' % (
+                        i, solution.numPaths()))
+
                     # Draw each solution path
                     for path in paths:
                         self._renderAcousticPath(path, color)
@@ -1141,10 +1248,13 @@ class EvertAcoustics(World):
     def _calculatePathRelativeToMicrophone(self, path, microphoneNp):
 
         # Get the last segment of the path
-        fromPt = LVecBase3(path.m_points[-2].x, path.m_points[-2].y, path.m_points[-2].z) / 1000.0  # mm to m
-        toPt = LVecBase3(path.m_points[-1].x, path.m_points[-1].y, path.m_points[-1].z) / 1000.0  # mm to m
+        fromPt = LVecBase3(
+            path.m_points[-2].x, path.m_points[-2].y, path.m_points[-2].z) / 1000.0  # mm to m
+        toPt = LVecBase3(
+            path.m_points[-1].x, path.m_points[-1].y, path.m_points[-1].z) / 1000.0  # mm to m
         assert np.allclose(vec3ToNumpyArray(toPt),
-                           vec3ToNumpyArray(microphoneNp.getNetTransform().getPos()),
+                           vec3ToNumpyArray(
+                               microphoneNp.getNetTransform().getPos()),
                            atol=1e-6)
 
         srcDirVec = (fromPt - toPt).normalized()
@@ -1155,17 +1265,20 @@ class EvertAcoustics(World):
         # XXX: apply a more general calculation of azimut and elevation angles
         headRollAngle = headTransform.getHpr().getZ()
         if not np.allclose(headRollAngle, 0.0, atol=1e-6):
-            logger.warn('Microphone has non-zero roll angle, which is not taken into account!')
+            logger.warn(
+                'Microphone has non-zero roll angle, which is not taken into account!')
 
         # Get the azimut in X-Y plane
         srcDirVecXY = LVector3f(srcDirVec.x, srcDirVec.y, 0.0).normalized()
         headDirVecXY = LVector3f(headDirVec.x, headDirVec.y, 0.0).normalized()
-        azimut = srcDirVecXY.signedAngleRad(headDirVecXY, LVector3f(0.0, 0.0, 1.0))
+        azimut = srcDirVecXY.signedAngleRad(
+            headDirVecXY, LVector3f(0.0, 0.0, 1.0))
 
         # Get the elevation in Y-Z plane
         srcDirVecYZ = LVector3f(0.0, srcDirVec.y, srcDirVec.z).normalized()
         headDirVecYZ = LVector3f(0.0, headDirVec.y, headDirVec.z).normalized()
-        elevation = srcDirVecYZ.signedAngleRad(headDirVecYZ, LVector3f(-1.0, 0.0, 0.0))
+        elevation = srcDirVecYZ.signedAngleRad(
+            headDirVecYZ, LVector3f(-1.0, 0.0, 0.0))
 
         return azimut, elevation
 
@@ -1183,13 +1296,14 @@ class EvertAcoustics(World):
         agentNp = self.scene.scene.find('**/' + lstName)
         microphoneNp = agentNp.find('**/acoustics/microphone*')
         sourceNp = self.scene.scene.find('**/' + srcName)
-        
+
         return AcousticImpulseResponse(impulse, self.samplingRate, sourceNp, microphoneNp)
 
     def _calculateImpulseResponse(self, solution, lstName):
 
         # Calculate impulse response in time domain, accounting for frequency-dependent absorption,
-        # then when it is time to convolve with the HRTF, do it in fourrier domain.
+        # then when it is time to convolve with the HRTF, do it in fourrier
+        # domain.
 
         # TODO: Get the source and microphone related to this solution
         agentNp = self.scene.scene.find('**/' + lstName)
@@ -1200,7 +1314,8 @@ class EvertAcoustics(World):
         else:
             nbChannels = 1
 
-        impulse = np.zeros((nbChannels, int(self.maxImpulseLength * self.samplingRate)))
+        impulse = np.zeros(
+            (nbChannels, int(self.maxImpulseLength * self.samplingRate)))
         realImpulseLength = 0
         for i in range(solution.numPaths()):
             path = solution.getPath(i)
@@ -1219,27 +1334,35 @@ class EvertAcoustics(World):
             if np.any(abs(attenuationsDb) < self.threshold):
 
                 if self.hrtf is not None:
-                    # Calculate azimut and elevation angles compared to the agent
-                    azimut, elevation = self._calculatePathRelativeToMicrophone(path, microphoneNp)
-                    hrtfImpulse = self.hrtf.getImpulseResponse(azimut, elevation)
+                    # Calculate azimut and elevation angles compared to the
+                    # agent
+                    azimut, elevation = self._calculatePathRelativeToMicrophone(
+                        path, microphoneNp)
+                    hrtfImpulse = self.hrtf.getImpulseResponse(
+                        azimut, elevation)
 
                 if self.frequencyDependent:
 
-                    # Skip paths that would have their impulse responses truncated at the end
+                    # Skip paths that would have their impulse responses
+                    # truncated at the end
                     if delaySamples + self.filterbank.n < impulse.shape[-1]:
 
                         linearGains = 10.0 ** (attenuationsDb / 20.0)
-                        pathImpulse = self.filterbank.getScaledImpulseResponse(linearGains)
+                        pathImpulse = self.filterbank.getScaledImpulseResponse(
+                            linearGains)
 
                         for channel in range(nbChannels):
 
                             if self.hrtf is not None:
-                                # FIXME: should be using 'full' mode for convolution, and flip the hrtf impulse?
-                                pathImpulseChan = signal.fftconvolve(pathImpulse, hrtfImpulse[channel], mode='same')
+                                # FIXME: should be using 'full' mode for
+                                # convolution, and flip the hrtf impulse?
+                                pathImpulseChan = signal.fftconvolve(
+                                    pathImpulse, hrtfImpulse[channel], mode='same')
                             else:
                                 pathImpulseChan = pathImpulse
 
-                            startIdx = int(delaySamples - self.filterbank.n / 2)
+                            startIdx = int(
+                                delaySamples - self.filterbank.n / 2)
                             endIdx = startIdx + len(pathImpulseChan) - 1
                             if startIdx < 0:
                                 trimStartIdx = -startIdx
@@ -1247,7 +1370,8 @@ class EvertAcoustics(World):
                             else:
                                 trimStartIdx = 0
 
-                            impulse[channel, startIdx:endIdx + 1] += phase * pathImpulseChan[trimStartIdx:]
+                            impulse[channel, startIdx:endIdx +
+                                    1] += phase * pathImpulseChan[trimStartIdx:]
 
                         if endIdx + 1 > realImpulseLength:
                             realImpulseLength = endIdx + 1
@@ -1260,16 +1384,19 @@ class EvertAcoustics(World):
                         if self.hrtf is not None:
                             pathImpulseChan = linearGain * hrtfImpulse[channel]
 
-                            # FIXME: should be checking for truncation at the beginning and end
+                            # FIXME: should be checking for truncation at the
+                            # beginning and end
                             startIdx = delaySamples
                             endIdx = startIdx + len(pathImpulseChan) - 1
 
-                            impulse[channel, startIdx:endIdx + 1] += phase * pathImpulseChan
+                            impulse[channel, startIdx:endIdx +
+                                    1] += phase * pathImpulseChan
                             if endIdx + 1 > realImpulseLength:
                                 realImpulseLength = endIdx + 1
 
                         else:
-                            impulse[channel, delaySamples] += phase * linearGain
+                            impulse[channel, delaySamples] += phase * \
+                                linearGain
                             if delaySamples + 1 > realImpulseLength:
                                 realImpulseLength = delaySamples + 1
 
@@ -1285,14 +1412,15 @@ class EvertAcoustics(World):
 
             model.getParent().setTag('acoustics-mode', 'obstacle')
 
-            coefficients = TextureAbsorptionTable.getMeanAbsorptionCoefficientsFromModel(model, units='normalized')
+            coefficients = TextureAbsorptionTable.getMeanAbsorptionCoefficientsFromModel(
+                model, units='normalized')
             materialId = len(self.coefficientsForMaterialId)
             self.coefficientsForMaterialId.append(coefficients)
 
             acousticModel = getAcousticModelNodeForModel(model, mode='mesh')
             acousticModel.hide(BitMask32.allOn())
             acousticModel.show(self.cameraMask)
-        
+
             objectNp = model.getParent()
             acousticsNp = objectNp.attachNewNode('acoustics')
             acousticModel.reparentTo(acousticsNp)
@@ -1310,7 +1438,7 @@ class EvertAcoustics(World):
             if parent.isEmpty():
                 parent = objectNp
             acousticsNp.reparentTo(parent)
-            
+
             self._addModelGeometry(acousticModel)
 
     def _initAgents(self):
@@ -1326,30 +1454,35 @@ class EvertAcoustics(World):
             microphoneNp = acousticNode.attachNewNode('microphone')
             if self.microphoneTransform is not None:
                 microphoneNp.setTransform(self.microphoneTransform)
-            model = self._loadSphereModel(refCenter=LVecBase3(0.0, 0.0, 0.0), radius=0.15, color=(1.0, 0.0, 0.0, 1.0))
+            model = self._loadSphereModel(refCenter=LVecBase3(
+                0.0, 0.0, 0.0), radius=0.15, color=(1.0, 0.0, 0.0, 1.0))
             model.reparentTo(microphoneNp)
 
             # Add listeners for EVERT
             lst = Listener()
             lst.setName(agent.getName())
-            
+
             netMat = microphoneNp.getNetTransform().getMat()
             lstNetPos = netMat.getRow3(3)
             lstNetMat = netMat.getUpper3()
-            lst.setPosition(Vector3(lstNetPos.x * 1000.0, lstNetPos.y * 1000.0, lstNetPos.z * 1000.0))  # m to mm
-            
-            # NOTE Orientation matrix: first column is direction vector, second column is up vector, third column is right vector
+            lst.setPosition(Vector3(
+                lstNetPos.x * 1000.0, lstNetPos.y * 1000.0, lstNetPos.z * 1000.0))  # m to mm
+
+            # NOTE Orientation matrix: first column is direction vector, second
+            # column is up vector, third column is right vector
             lst.setOrientation(Matrix3(lstNetMat.getCell(0, 0), lstNetMat.getCell(2, 0), -lstNetMat.getCell(1, 0),
-                                       lstNetMat.getCell(0, 1), lstNetMat.getCell(2, 1), -lstNetMat.getCell(1, 1),
+                                       lstNetMat.getCell(0, 1), lstNetMat.getCell(
+                                           2, 1), -lstNetMat.getCell(1, 1),
                                        lstNetMat.getCell(0, 2), lstNetMat.getCell(2, 2), -lstNetMat.getCell(1, 2)))
-            
+
             self.world.addListener(lst)
-            
+
             logger.debug('Agent %s: microphone at position (x=%f, y=%f, z=%f)' % (
-            agent.getName(), lstNetPos.x, lstNetPos.y, lstNetPos.z))
+                agent.getName(), lstNetPos.x, lstNetPos.y, lstNetPos.z))
 
             # Allocate output buffer
-            self.outBuffers[agent.getName()] = np.array([[] for _ in range(self.getNbOutputChannels())])
+            self.outBuffers[agent.getName()] = np.array(
+                [[] for _ in range(self.getNbOutputChannels())])
 
             self.agents.append(agent)
 
@@ -1378,14 +1511,16 @@ class EvertAcoustics(World):
 
                 model.getParent().setTag('acoustics-mode', 'obstacle')
 
-                coefficients = TextureAbsorptionTable.getMeanAbsorptionCoefficientsFromModel(model, units='normalized')
+                coefficients = TextureAbsorptionTable.getMeanAbsorptionCoefficientsFromModel(
+                    model, units='normalized')
                 materialId = len(self.coefficientsForMaterialId)
                 self.coefficientsForMaterialId.append(coefficients)
 
-                acousticModel = getAcousticModelNodeForModel(model, mode=self.objectMode)
+                acousticModel = getAcousticModelNodeForModel(
+                    model, mode=self.objectMode)
                 acousticModel.hide(BitMask32.allOn())
                 acousticModel.show(self.cameraMask)
-            
+
                 objectNp = model.getParent()
                 acousticsNp = objectNp.attachNewNode('acoustics')
                 acousticModel.reparentTo(acousticsNp)
@@ -1399,33 +1534,36 @@ class EvertAcoustics(World):
                 acousticModel.setTextureOff(1)
                 acousticModel.setTag('materialId', str(materialId))
 
-                #NOTE: since the object is static, we don't even need to reparent the acoustic node under physics
+                # NOTE: since the object is static, we don't even need to
+                # reparent the acoustic node under physics
                 parent = objectNp.find('**/physics*')
                 if parent.isEmpty():
                     parent = objectNp
                 acousticsNp.reparentTo(parent)
-                
+
                 self._addModelGeometry(acousticModel)
 
     def _addModelGeometry(self, model):
-        
+
         if model.hasNetTag('physics-mode') and model.getNetTag('physics-mode') != 'static':
             raise Exception('Obstacles in EVERT must be static!')
-        
+
         materialId = int(model.getTag('materialId'))
-        
+
         # Add polygons to EVERT engine
         # TODO: for bounding box approximations, we could reduce the number of triangles by
-        #      half if each face of the box was modelled as a single rectangular polygon.
+        # half if each face of the box was modelled as a single rectangular
+        # polygon.
         polygons, triangles = getAcousticPolygonsFromModel(model)
         for polygon, triangle in zip(polygons, triangles):
-        
+
             # Validate triangle (ignore if area is too small)
             dims = np.max(triangle, axis=0) - np.min(triangle, axis=0)
-            s = np.sum(np.array(dims > self.minWidthThresholdPolygons, dtype=np.int))
+            s = np.sum(
+                np.array(dims > self.minWidthThresholdPolygons, dtype=np.int))
             if s < 2:
                 continue
-        
+
             polygon.setMaterialId(materialId)
             self.world.addPolygon(polygon, Vector3(1.0, 1.0, 1.0))
 
@@ -1446,15 +1584,18 @@ class EvertAcoustics(World):
             netMat = microphoneNp.getNetTransform().getMat()
             lstNetPos = netMat.getRow3(3)
             lstNetMat = netMat.getUpper3()
-            lst.setPosition(Vector3(lstNetPos.x * 1000.0, lstNetPos.y * 1000.0, lstNetPos.z * 1000.0))  # m to mm
-            
-            # NOTE Orientation matrix: first column is direction vector, second column is up vector, third column is right vector
+            lst.setPosition(Vector3(
+                lstNetPos.x * 1000.0, lstNetPos.y * 1000.0, lstNetPos.z * 1000.0))  # m to mm
+
+            # NOTE Orientation matrix: first column is direction vector, second
+            # column is up vector, third column is right vector
             lst.setOrientation(Matrix3(lstNetMat.getCell(0, 0), lstNetMat.getCell(2, 0), -lstNetMat.getCell(1, 0),
-                                       lstNetMat.getCell(0, 1), lstNetMat.getCell(2, 1), -lstNetMat.getCell(1, 1),
+                                       lstNetMat.getCell(0, 1), lstNetMat.getCell(
+                                           2, 1), -lstNetMat.getCell(1, 1),
                                        lstNetMat.getCell(0, 2), lstNetMat.getCell(2, 2), -lstNetMat.getCell(1, 2)))
 
             logger.debug('Agent %s: microphone at position (x=%f, y=%f, z=%f)' % (
-            agent.getName(), lstNetPos.x, lstNetPos.y, lstNetPos.z))
+                agent.getName(), lstNetPos.x, lstNetPos.y, lstNetPos.z))
 
     def _updateSources(self):
 
@@ -1474,20 +1615,20 @@ class EvertAcoustics(World):
             # Get position and orientation of the static sound source
             sourceNetTrans = obj.getNetTransform().getMat()
             sourceNetPos = sourceNetTrans.getRow3(3)
-    
+
             logger.debug('Static source %s: at position (x=%f, y=%f, z=%f)' % (
-            obj.getName(), sourceNetPos.x, sourceNetPos.y, sourceNetPos.z))
+                obj.getName(), sourceNetPos.x, sourceNetPos.y, sourceNetPos.z))
 
     def step(self, dt):
 
         if not self.initEvertDone:
-            
+
             self._initLayoutModels()
             self._initObjects()
             self._initAgents()
-            
+
             self.world.constructBSP()
-            
+
             self._initPathSolutions()
             self.initEvertDone = True
 
@@ -1500,21 +1641,21 @@ class EvertAcoustics(World):
             self._updateRenderedAcousticSolutions()
 
     def update(self, task):
-        
+
         # Get dt
         dt = task.time - self.lastTaskTime
-        #dt2 = ClockObject.getGlobalClock().getDt()
+        # dt2 = ClockObject.getGlobalClock().getDt()
         self.lastTaskTime = task.time
         assert dt >= 0.0
-        
+
         if not self.initEvertDone:
-            
+
             self._initLayoutModels()
             self._initObjects()
             self._initAgents()
-            
+
             self.world.constructBSP()
-            
+
             self._initPathSolutions()
             self.initEvertDone = True
 
@@ -1525,26 +1666,28 @@ class EvertAcoustics(World):
 
         if self.debug:
             self._updateRenderedAcousticSolutions()
-        
+
         ClockObject.getGlobalClock().tick()
-        
+
         return task.cont
 
     def getObservationsForAgent(self, name, clearBuffer=True):
-        
+
         if self.hrtf is not None:
             channelNames = self.hrtf.channels
         else:
             channelNames = ['0']
-            
+
         observations = dict()
         for i, channelName in enumerate(channelNames):
-            observations['audio-buffer-%s' % (channelName)] = self.outBuffers[name][i,:]
-            
+            observations['audio-buffer-%s' %
+                         (channelName)] = self.outBuffers[name][i, :]
+
         if clearBuffer:
             # Clear output buffer
-            self.outBuffers[name] = np.array([[] for _ in range(self.getNbOutputChannels())])
-        
+            self.outBuffers[name] = np.array(
+                [[] for _ in range(self.getNbOutputChannels())])
+
         return observations
 
     def addAmbientSound(self, sound):
@@ -1559,18 +1702,18 @@ class EvertAcoustics(World):
         """
         Sound will come from the location of the object it is attached to
         """
-        
+
         if obj.hasTag('physics-mode') and obj.getTag('physics-mode') != 'static':
             raise Exception('Sources in EVERT must be static!')
-        
+
         sound.resample(self.samplingRate)
-        
+
         self.sounds[obj.getName()] = sound
-        
+
         # Allocate a buffer for that sound
         nbMaxSamples = int(self.maxBufferLength * self.samplingRate)
         self.srcBuffers[sound] = np.zeros((nbMaxSamples,), np.float32)
-        
+
         # Create source in EVERT
         src = Source()
         src.setName(obj.getName())
@@ -1581,93 +1724,103 @@ class EvertAcoustics(World):
         sourceNetMat = sourceNetTrans.getUpper3()
         src.setPosition(
             Vector3(sourceNetPos.x * 1000.0, sourceNetPos.y * 1000.0, sourceNetPos.z * 1000.0))  # m to mm
-        
-        # NOTE Orientation matrix: first column is direction vector, second column is up vector, third column is right vector
+
+        # NOTE Orientation matrix: first column is direction vector, second
+        # column is up vector, third column is right vector
         src.setOrientation(Matrix3(sourceNetMat.getCell(0, 0), sourceNetMat.getCell(2, 0), -sourceNetMat.getCell(1, 0),
-                                   sourceNetMat.getCell(0, 1), sourceNetMat.getCell(2, 1), -sourceNetMat.getCell(1, 1),
+                                   sourceNetMat.getCell(0, 1), sourceNetMat.getCell(
+                                       2, 1), -sourceNetMat.getCell(1, 1),
                                    sourceNetMat.getCell(0, 2), sourceNetMat.getCell(2, 2), -sourceNetMat.getCell(1, 2)))
-        
+
         logger.debug('Static source %s: at position (x=%f, y=%f, z=%f)' % (
-        obj.getName(), sourceNetPos.x, sourceNetPos.y, sourceNetPos.z))
-        
-        # Add as source in EVERT 
+            obj.getName(), sourceNetPos.x, sourceNetPos.y, sourceNetPos.z))
+
+        # Add as source in EVERT
         self.world.addSource(src)
-        
+
         # Add acoustic node in scene graph
         obj.setTag('acoustics-mode', 'source')
         acousticsNp = obj.attachNewNode('acoustics')
         if self.debug:
             # Load model for the sound source
-            acousticModel = self._loadSphereModel(LVector3f(0, 0, 0), radius=0.25, color=(1.0, 0.0, 0.0, 1.0))
+            acousticModel = self._loadSphereModel(
+                LVector3f(0, 0, 0), radius=0.25, color=(1.0, 0.0, 0.0, 1.0))
             acousticModel.reparentTo(acousticsNp)
-        
+
         return 1
 
     def _initPathSolutions(self):
-         
+
         # Create new solutions for all pairs of source-listener
         for i in range(self.world.numSources()):
             src = self.world.getSource(i)
             obj = self.scene.scene.find('**/objects/%s' % (src.getName()))
             sound = self.sounds[src.getName()]
-            
+
             for l in range(self.world.numListeners()):
                 lst = self.world.getListener(l)
-                
-                #WARNING: we have to create the PathSolution instances after adding all sources and listeners,
-                #         otherwise it leads to memory errors since sources can be moved in memory-space.
-                solution = PathSolution(self.world, src, lst, self.maximumOrder)
-                 
+
+                # WARNING: we have to create the PathSolution instances after adding all sources and listeners,
+                # otherwise it leads to memory errors since sources can be
+                # moved in memory-space.
+                solution = PathSolution(
+                    self.world, src, lst, self.maximumOrder)
+
                 # Force update to pre-compute cache
                 solution.update()
-                 
+
                 if lst.getName() not in self.solutions:
                     self.solutions[lst.getName()] = []
-                 
-                self.solutions[lst.getName()].append((solution, sound, obj.getName()))
+
+                self.solutions[lst.getName()].append(
+                    (solution, sound, obj.getName()))
 
     def _updateSrcBuffers(self, dt):
 
         if dt > 0.0:
-    
-            # NOTE: round dt to make sure it equals an non-fractional number of samples
-            dt = float(int(np.floor(dt * self.samplingRate))/self.samplingRate)
+
+            # NOTE: round dt to make sure it equals an non-fractional number of
+            # samples
+            dt = float(int(np.floor(dt * self.samplingRate)) /
+                       self.samplingRate)
             newDataLength = int(np.round(dt * self.samplingRate))
-            
+
             # Gather all attached and ambient sounds
             sounds = []
             for sound in itervalues(self.sounds):
                 sounds.append(sound)
             sounds.extend(self.ambientSounds)
-            
+
             for sound in sounds:
-    
-                #TODO: handle isActive() property of sounds
-            
+
+                # TODO: handle isActive() property of sounds
+
                 # Check sound status for updating audio buffer
                 if sound.status() == AudioSound.PLAYING:
-                    
-                    # Check the current seek position for the sound and get data
+
+                    # Check the current seek position for the sound and get
+                    # data
                     tStart = sound.t
                     tEnd = sound.t + dt
-                    
+
                     if tEnd <= sound.length():
                         # Get the sound data for this timestep
                         startIdx = int(np.round(tStart * sound.samplingRate))
                         endIdx = int(np.round(tEnd * sound.samplingRate)) - 1
-                        data = sound.data[startIdx:endIdx+1]
+                        data = sound.data[startIdx:endIdx + 1]
                     else:
                         # Get the sound data for this timestep
                         startIdx = int(tStart * sound.samplingRate)
                         data = sound.data[startIdx:]
-                        
+
                         # Pad end with zeros to match desired buffer length
-                        data = np.pad(data, [(0, newDataLength - len(data))], mode='constant')
-                        
+                        data = np.pad(
+                            data, [(0, newDataLength - len(data))], mode='constant')
+
                         # Indicates end of play loop
                         sound.curLoopCount += 1
                         sound.stop()
-                        
+
                     # Update buffer for sound
                     assert len(data) == newDataLength
                     buf = self.srcBuffers[sound]
@@ -1678,12 +1831,12 @@ class EvertAcoustics(World):
                     else:
                         buf = data[len(data) - len(buf):]
                     self.srcBuffers[sound] = buf
-    
+
                     # Update seek position for sound
                     sound.t += dt
-        
+
                 elif sound.status() == AudioSound.READY:
-                    
+
                     # Update buffer for sound
                     buf = self.srcBuffers[sound]
                     data = np.zeros((newDataLength,), dtype=buf.dtype)
@@ -1694,69 +1847,83 @@ class EvertAcoustics(World):
                     else:
                         buf = data[len(data) - len(buf):]
                     self.srcBuffers[sound] = buf
-                
+
                 # Handling of loop mode for sounds
                 if sound.status() == AudioSound.READY:
                     if sound.getLoop():
-                        # Check loop count: 0 = forever; 1 = play once; n = play n times
+                        # Check loop count: 0 = forever; 1 = play once; n =
+                        # play n times
                         if sound.getLoopCount() > 0:
                             if sound.curLoopCount < sound.getLoopCount():
                                 # Not yet reach the maximum replay limit
                                 sound.play()
 
     def _updateOutputBuffers(self, dt):
-        
+
         if dt > 0.0:
-        
+
             # Loop for all agent
             for agent in self.agents:
-    
+
                 # Initialize new output buffer for this timestep
-                # NOTE: round dt to make sure it equals an non-fractional number of samples
-                dt = float(int(np.floor(dt * self.samplingRate))/self.samplingRate)
+                # NOTE: round dt to make sure it equals an non-fractional
+                # number of samples
+                dt = float(int(np.floor(dt * self.samplingRate)) /
+                           self.samplingRate)
                 newDataLength = int(np.round(dt * self.samplingRate))
-                
+
                 # FIXME: need to take care of buffer overrun here
                 if dt > self.maxBufferLength + self.maxImpulseLength:
-                    newDataLength = int((self.maxBufferLength - self.maxImpulseLength) * self.samplingRate)
+                    newDataLength = int(
+                        (self.maxBufferLength - self.maxImpulseLength) * self.samplingRate)
                 nbChannels = self.getNbOutputChannels()
-                outBuf = np.zeros((nbChannels, newDataLength), dtype=np.float32)
-    
+                outBuf = np.zeros(
+                    (nbChannels, newDataLength), dtype=np.float32)
+
                 # Loop for all attached sounds
                 if agent.getName() in self.solutions:
                     for solution, sound, _ in self.solutions[agent.getName()]:
-                                
-                        # NOTE: fast update of the solution, since the beam tree should already has been pre-computed 
+
+                        # NOTE: fast update of the solution, since the beam
+                        # tree should already has been pre-computed
                         solution.update()
-                        
-                        # Get the impulse response related to this source-listener pair
-                        impulse = self._calculateImpulseResponse(solution, agent.getName())
-                        if impulse.shape[-1] > 0: 
-                            
+
+                        # Get the impulse response related to this
+                        # source-listener pair
+                        impulse = self._calculateImpulseResponse(
+                            solution, agent.getName())
+                        if impulse.shape[-1] > 0:
+
                             # Get the source buffer related to the sound
                             buf = self.srcBuffers[sound]
-                            
-                            # Convolve source with impulse and add contribution to output buffer
+
+                            # Convolve source with impulse and add contribution
+                            # to output buffer
                             nbChannels = impulse.shape[0]
                             nbInSamples = newDataLength + impulse.shape[1] - 1
                             for channel in range(nbChannels):
-                                outBuf[channel,:] += signal.convolve(buf[len(buf) - nbInSamples:], impulse[channel], mode='valid') * sound.getVolume()
-        
+                                outBuf[channel, :] += signal.convolve(
+                                    buf[len(buf) - nbInSamples:], impulse[channel], mode='valid') * sound.getVolume()
+
                 # Loop for all ambient sounds
                 for sound in self.ambientSounds:
-                    
+
                     # Get the source buffer related to the sound
                     buf = self.srcBuffers[sound]
-                    
+
                     # Add contribution equally to all channels
                     nbChannels = self.getNbOutputChannels()
                     nbInSamples = newDataLength
                     for channel in range(nbChannels):
-                        outBuf[channel,:] += buf[len(buf) - nbInSamples:] * sound.getVolume()
-        
-                # XXX: should we concatenate to create a continuous buffer or simply append as frames to a list?
-                self.outBuffers[agent.getName()] = np.concatenate((self.outBuffers[agent.getName()], outBuf), axis=-1)
-    
+                        outBuf[channel,
+                               :] += buf[len(buf) - nbInSamples:] * sound.getVolume()
+
+                # XXX: should we concatenate to create a continuous buffer or
+                # simply append as frames to a list?
+                self.outBuffers[agent.getName()] = np.concatenate(
+                    (self.outBuffers[agent.getName()], outBuf), axis=-1)
+
+
 class EvertAudioSound(object):
     # Python implementation of AudioSound abstract class:
     # https://www.panda3d.org/reference/1.9.4/python/panda3d.core.AudioSound
@@ -1767,21 +1934,21 @@ class EvertAudioSound(object):
 
         # Load sound from file
         data, fs = sf.read(filename)
-        
+
         # Make sure the sound is mono, and keep the first channel only
         if data.ndim == 2 and data.shape[0] >= 1:
-            data = data[0,:]
-        
+            data = data[0, :]
+
         # Normalize in the interval [-1, 1]
         data = data / np.max(np.abs(data))
-        
+
         self.data = data
         self.samplingRate = fs
 
         self.reset()
 
     def reset(self):
-        
+
         self.t = 0.0
         self.isActive = True
         self.isLoop = False
@@ -1908,30 +2075,30 @@ class EvertAudioSound(object):
 
     def write(self, out):
         raise NotImplementedError()
-    
-    
-#XXX: use Task chains for multithreading, see https://www.panda3d.org/manual/index.php/Task_Chains
+
+
+# XXX: use Task chains for multithreading, see
+# https://www.panda3d.org/manual/index.php/Task_Chains
 class AudioPlayer(object):
-    
+
     def __init__(self, acoustics):
-        
+
         self.acoustics = acoustics
-        
+
         import pyaudio
         from pyaudio import paFloat32
-        
+
         self.p = pyaudio.PyAudio()
         self.stream = self.p.open(format=paFloat32,
                                   channels=acoustics.getNbOutputChannels(),
                                   rate=int(acoustics.samplingRate),
                                   output=True)
-    
+
         # Select default agent
         self.agentName = self.acoustics.scene.agents[0].getName()
-        
+
         taskMgr.add(self.update, 'audio-player', sort=1)
-    
-    
+
         # Get a pointer to Panda's global ClockObject, used for
         # synchronizing events between Python and C.
         globalClock = ClockObject.getGlobalClock()
@@ -1940,11 +2107,11 @@ class AudioPlayer(object):
 
         # Now we can make the TaskManager start using the new globalClock.
         taskMgr.globalClock = globalClock
-    
+
     def _getFrame(self):
-        
+
         obs = self.acoustics.getObservationsForAgent(self.agentName)
-    
+
         if 'audio-buffer-left' in obs and 'audio-buffer-right' in obs:
             data = np.array([obs['audio-buffer-left'],
                              obs['audio-buffer-right']], dtype=np.float32)
@@ -1952,28 +2119,27 @@ class AudioPlayer(object):
             data = np.array(obs['audio-buffer-0'], dtype=np.float32)
         else:
             raise Exception('Unknown channel configuration in observations')
-            
+
         # Interleave channels if multiple
         frame = np.empty((data.shape[-1] * data.shape[0],), dtype=data.dtype)
         for i in range(data.shape[0]):
-            frame[i::data.shape[0]] = data[i,:]
-        
+            frame[i::data.shape[0]] = data[i, :]
+
         return frame
-    
+
     def setListeningToAgent(self, name):
         self.agentName = name
-        
+
     def update(self, task):
-        
+
         data = self._getFrame()
         self.stream.write(data)
-        
+
         return task.cont
-        
+
     def __del__(self):
         taskMgr.remove('audio-player')
-        
+
         self.stream.stop_stream()
         self.stream.close()
         self.p.terminate()
-        

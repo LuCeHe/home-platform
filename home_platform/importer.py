@@ -156,12 +156,12 @@ class MtlFile:
         self.materials = {}
         self.comments = {}
         try:
-            file = open(filename)
-        except:
+            fd = open(filename)
+        except Exception:
             return self
         linenumber = 0
         mat = None
-        for line in file.readlines():
+        for line in fd.readlines():
             line = line.strip()
             linenumber = linenumber + 1
             if not line:
@@ -216,7 +216,7 @@ class MtlFile:
                 continue
             logger.warning("file \"%s\": line %d: unrecognized: %s" %
                            (filename, linenumber, str(tokens)))
-        file.close()
+        fd.close()
         return self
 
 
@@ -262,11 +262,11 @@ class ObjFile:
         self.currentgroup = self.groups[0]
         self.currentmaterial = None
         try:
-            file = open(filename)
-        except:
+            fd = open(filename)
+        except Exception:
             return self
         linenumber = 0
-        for line in file.readlines():
+        for line in fd.readlines():
             line = line.strip()
             linenumber = linenumber + 1
             if not line:
@@ -285,7 +285,8 @@ class ObjFile:
                     # Check if relative path to obj
                     mtlPath = os.path.join(os.path.dirname(filename), mtlPath)
                     if not os.path.exists(mtlPath):
-                        logger.warning('Could not find mtl file: %s' % (str(tokens[1])))
+                        logger.warning(
+                            'Could not find mtl file: %s' % (str(tokens[1])))
 
                 mtllib = MtlFile(mtlPath)
                 self.matlibs.append(mtllib)
@@ -322,7 +323,7 @@ class ObjFile:
                 continue
             logger.warning("%s:%d: unknown: %s" %
                            (filename, linenumber, str(tokens)))
-        file.close()
+        fd.close()
         return self
 
     def __vertlist(self, lst):
@@ -386,7 +387,7 @@ class ObjFile:
         for mname in mtllib.materials:
             mobj = mtllib.materials[mname]
             self.materialsbyname[mobj.name] = mobj
-        logger.debug("indexmaterials: %s materials: %s" % (str(mtllib.filename), 
+        logger.debug("indexmaterials: %s materials: %s" % (str(mtllib.filename),
                                                            str(self.materialsbyname.keys())))
         return self
 
@@ -394,10 +395,10 @@ class ObjFile:
         self.currentobject = "defaultobject"
         return self
 
-    def __newobject(self, object):
+    def __newobject(self, obj):
         self.__closeobject()
-        self.currentobject = object
-        self.objects.append(object)
+        self.currentobject = obj
+        self.objects.append(obj)
         return self
 
     def __closegroup(self):
@@ -420,8 +421,8 @@ class ObjFile:
     def __itemsby(self, itemlist, objname, groupname):
         res = []
         for item in itemlist:
-            vlist, mdata = item
-            wobj, wgrp, wmat = mdata
+            _, mdata = item
+            wobj, wgrp, _ = mdata
             if (wobj == objname) and (wgrp == groupname):
                 res.append(item)
         return res
@@ -436,7 +437,7 @@ class ObjFile:
         for vertex in vlist:
             ixyz = vertex['v']
             vinfo = self.points[ixyz - 1]
-            vxyz, vmeta = vinfo
+            vxyz, _ = vinfo
             ev = EggVertex()
             ev.setPos(Point3D(vxyz[0], vxyz[1], vxyz[2]))
             iuv = vertex['vt']
@@ -483,12 +484,11 @@ class ObjFile:
         egrp.addChild(evpool)
         for face in selectedfaces:
             vlist, mdata = face
-            wobj, wgrp, wmat = mdata
+            _, _, wmat = mdata
             epoly = EggPolygon()
             egrp.addChild(epoly)
             self.__eggifymats(epoly, wmat)
             self.__eggifyverts(epoly, evpool, vlist)
-        #; each matching face
         return self
 
     def __polylinestoegg(self, egg, objname, groupname):
@@ -503,12 +503,11 @@ class ObjFile:
         egrp.addChild(evpool)
         for line in selectedlines:
             vlist, mdata = line
-            wobj, wgrp, wmat = mdata
+            _, _, wmat = mdata
             eline = EggLine()
             egrp.addChild(eline)
             self.__eggifymats(eline, wmat)
             self.__eggifyverts(eline, evpool, vlist)
-        #; each matching line
         return self
 
     def toEgg(self):
@@ -540,10 +539,11 @@ def pathify(path):
     orig = path
     path = path.lower()
     path = path.replace("\\", "/")
-    h, t = os.path.split(path)
+    _, t = os.path.split(path)
     if os.path.isfile(t):
         return t
-    logger.warning("warning: can't make sense of this map file name: %s" % (str(orig)))
+    logger.warning(
+        "warning: can't make sense of this map file name: %s" % (str(orig)))
     return t
 
 

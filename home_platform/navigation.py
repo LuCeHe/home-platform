@@ -504,7 +504,8 @@ class NavigationHelper(object):
 
         roomMaps = dict()
         if roomIds is None:
-            roomIds = [roomNp.getTag('room-id') for roomNp in self.scene.scene.findAllMatches('**/level-%d/room-*' % (level))]
+            roomIds = [roomNp.getTag(
+                'room-id') for roomNp in self.scene.scene.findAllMatches('**/level-%d/room-*' % (level))]
         for roomId in roomIds:
             roomMap, _, _ = self.calculateFloorMap(
                 resolution, level, xlim, ylim, roomIds=[roomId])

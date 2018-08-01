@@ -1,41 +1,40 @@
 # Copyright (c) 2017, IGLU consortium
 # All rights reserved.
-# 
+#
 # Redistribution and use in source and binary forms, with or without modification,
 # are permitted provided that the following conditions are met:
-# 
-#  - Redistributions of source code must retain the above copyright notice, 
+#
+#  - Redistributions of source code must retain the above copyright notice,
 #    this list of conditions and the following disclaimer.
-#  - Redistributions in binary form must reproduce the above copyright notice, 
-#    this list of conditions and the following disclaimer in the documentation 
+#  - Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#  - Neither the name of the NECOTIS research group nor the names of its contributors 
-#    may be used to endorse or promote products derived from this software 
+#  - Neither the name of the NECOTIS research group nor the names of its contributors
+#    may be used to endorse or promote products derived from this software
 #    without specific prior written permission.
-# 
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
-# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
-# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
-# IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
-# INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT 
-# NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, 
-# OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
-# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+# IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+# INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+# NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+# OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
 import sys
 import numpy as np
 
+from panda3d.core import ClockObject, AmbientLight, VBase4, PointLight, AntialiasAttrib, TextNode, LVector3f
+from direct.showbase.ShowBase import ShowBase, WindowProperties
+from direct.gui.OnscreenText import OnscreenText
+
 if (sys.version_info > (3, 0)):
     import builtins
 else:
-    import __builtin__ as  builtins
-
-from panda3d.core import ClockObject, AmbientLight, VBase4, PointLight, AntialiasAttrib, TextNode, LVector3f
-
-from direct.showbase.ShowBase import ShowBase, WindowProperties
-from direct.gui.OnscreenText import OnscreenText
+    import __builtin__ as builtins
 
 
 def mat4ToNumpyArray(mat):
@@ -48,18 +47,20 @@ def mat4ToNumpyArray(mat):
 def vec3ToNumpyArray(vec):
     return np.array([vec.x, vec.y, vec.z])
 
+
 class Controller(ShowBase):
     def __init__(self, scene, size=(800, 600), zNear=0.1, zFar=1000.0, fov=40.0, shadowing=False, showPosition=False,
                  cameraTransform=None, cameraMask=None):
 
         ShowBase.__init__(self)
-        
+
         self.__dict__.update(scene=scene, size=size, fov=fov,
                              zNear=zNear, zFar=zFar, shadowing=shadowing, showPosition=showPosition,
                              cameraTransform=cameraTransform, cameraMask=cameraMask)
 
         # Find agent and reparent camera to it
-        self.agent = self.scene.scene.find('**/agents/agent*/+BulletRigidBodyNode')
+        self.agent = self.scene.scene.find(
+            '**/agents/agent*/+BulletRigidBodyNode')
         self.camera.reparentTo(self.agent)
         if self.cameraTransform is not None:
             self.camera.setTransform(cameraTransform)
@@ -168,26 +169,29 @@ class Controller(ShowBase):
         y = md.getY()
 
         if self.win.movePointer(0, int(self.centX), int(self.centY)):
-            self.agent.setH(self.agent, self.agent.getH(self.agent) - (x - self.centX) * self.sensX)
-            self.agent.setP(self.agent, self.agent.getP(self.agent) - (y - self.centY) * self.sensY)
+            self.agent.setH(self.agent, self.agent.getH(
+                self.agent) - (x - self.centX) * self.sensX)
+            self.agent.setP(self.agent, self.agent.getP(
+                self.agent) - (y - self.centY) * self.sensY)
             self.agent.setR(0.0)
 
         linearVelocityX = 0.0
         linearVelocityY = 0.0
 
-        if self.forward == True:
+        if self.forward:
             linearVelocityY += self.movSens * self.fast
-        if self.backward == True:
+        if self.backward:
             linearVelocityY -= self.movSens * self.fast
-        if self.left == True:
+        if self.left:
             linearVelocityX -= self.movSens * self.fast
-        if self.right == True:
+        if self.right:
             linearVelocityX += self.movSens * self.fast
 
         linearVelocity = LVector3f(linearVelocityX, linearVelocityY, 0.0)
 
         # Apply the local transform to the velocity
-        # XXX: use BulletCharacterControllerNode class, which already handles local transform?
+        # XXX: use BulletCharacterControllerNode class, which already handles
+        # local transform?
         rotMat = self.agent.node().getTransform().getMat().getUpper3()
         linearVelocity = rotMat.xformVec(linearVelocity)
         linearVelocity.z = 0.0
@@ -198,7 +202,8 @@ class Controller(ShowBase):
             hpr = self.agent.getNetTransform().getHpr()
             self.positionText.setText(
                 'Position: (x = %4.2f, y = %4.2f, z = %4.2f)' % (position.x, position.y, position.z))
-            self.orientationText.setText('Orientation: (h = %4.2f, p = %4.2f, r = %4.2f)' % (hpr.x, hpr.y, hpr.z))
+            self.orientationText.setText(
+                'Orientation: (h = %4.2f, p = %4.2f, r = %4.2f)' % (hpr.x, hpr.y, hpr.z))
 
         self.time = task.time
 
@@ -361,38 +366,39 @@ class Viewer(ShowBase):
             y = md.getY()
 
             if self.win.movePointer(0, int(self.centX), int(self.centY)):
-                self.cam.setH(self.cam, self.cam.getH(self.cam)
-                              - (x - self.centX) * self.sensX)
-                self.cam.setP(self.cam, self.cam.getP(self.cam)
-                              - (y - self.centY) * self.sensY)
+                self.cam.setH(self.cam, self.cam.getH(
+                    self.cam) - (x - self.centX) * self.sensX)
+                self.cam.setP(self.cam, self.cam.getP(
+                    self.cam) - (y - self.centY) * self.sensY)
                 self.cam.setR(0)
 
             # handle keys:
-            if self.forward == True:
-                self.cam.setY(self.cam, self.cam.getY(self.cam)
-                              + self.movSens * self.fast * dt)
-            if self.backward == True:
-                self.cam.setY(self.cam, self.cam.getY(self.cam)
-                              - self.movSens * self.fast * dt)
-            if self.left == True:
-                self.cam.setX(self.cam, self.cam.getX(self.cam)
-                              - self.movSens * self.fast * dt)
-            if self.right == True:
-                self.cam.setX(self.cam, self.cam.getX(self.cam)
-                              + self.movSens * self.fast * dt)
-            if self.up == True:
-                self.cam.setZ(self.cam, self.cam.getZ(self.cam)
-                              + self.movSens * self.fast * dt)
-            if self.down == True:
-                self.cam.setZ(self.cam, self.cam.getZ(self.cam)
-                              - self.movSens * self.fast * dt)
+            if self.forward:
+                self.cam.setY(self.cam, self.cam.getY(
+                    self.cam) + self.movSens * self.fast * dt)
+            if self.backward:
+                self.cam.setY(self.cam, self.cam.getY(
+                    self.cam) - self.movSens * self.fast * dt)
+            if self.left:
+                self.cam.setX(self.cam, self.cam.getX(
+                    self.cam) - self.movSens * self.fast * dt)
+            if self.right:
+                self.cam.setX(self.cam, self.cam.getX(
+                    self.cam) + self.movSens * self.fast * dt)
+            if self.up:
+                self.cam.setZ(self.cam, self.cam.getZ(
+                    self.cam) + self.movSens * self.fast * dt)
+            if self.down:
+                self.cam.setZ(self.cam, self.cam.getZ(
+                    self.cam) - self.movSens * self.fast * dt)
 
         if self.showPosition:
             position = self.cam.getNetTransform().getPos()
             hpr = self.cam.getNetTransform().getHpr()
             self.positionText.setText(
                 'Position: (x = %4.2f, y = %4.2f, z = %4.2f)' % (position.x, position.y, position.z))
-            self.orientationText.setText('Orientation: (h = %4.2f, p = %4.2f, r = %4.2f)' % (hpr.x, hpr.y, hpr.z))
+            self.orientationText.setText(
+                'Orientation: (h = %4.2f, p = %4.2f, r = %4.2f)' % (hpr.x, hpr.y, hpr.z))
 
         self.time = task.time
 

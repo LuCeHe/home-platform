@@ -50,7 +50,8 @@ from six import iteritems
 
 logger = logging.getLogger(__name__)
 
-MODEL_DATA_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "models")
+MODEL_DATA_DIR = os.path.join(os.path.dirname(
+    os.path.realpath(__file__)), "..", "data", "models")
 
 
 class Panda3dRenderer(World):
@@ -161,7 +162,8 @@ class Panda3dRenderer(World):
             tex = Texture()
             tex.setFormat(Texture.FRgb8)
             tex.setComponentType(Texture.TUnsignedByte)
-            buf.addRenderTexture(tex, GraphicsOutput.RTMCopyRam, GraphicsOutput.RTPColor)
+            buf.addRenderTexture(
+                tex, GraphicsOutput.RTMCopyRam, GraphicsOutput.RTPColor)
             # XXX: should use tex.setMatchFramebufferFormat(True)?
 
             agent = camera.getParent()
@@ -217,7 +219,8 @@ class Panda3dRenderer(World):
             tex = Texture()
             tex.setFormat(Texture.FDepthComponent)
             tex.setComponentType(Texture.TFloat)
-            buf.addRenderTexture(tex, GraphicsOutput.RTMCopyRam, GraphicsOutput.RTPDepth)
+            buf.addRenderTexture(
+                tex, GraphicsOutput.RTMCopyRam, GraphicsOutput.RTPDepth)
             # XXX: should use tex.setMatchFramebufferFormat(True)?
 
             agent = camera.getParent()
@@ -256,7 +259,8 @@ class Panda3dRenderer(World):
         for name, tex in iteritems(self.rgbTextures):
 
             # XXX: not sure about calling makeRamImage() before getting the image data, since it returns an empty image
-            #      and overwrite any previously rendered image. We may just call it once when we create the texture.
+            # and overwrite any previously rendered image. We may just call it
+            # once when we create the texture.
             if not tex.mightHaveRamImage():
                 tex.makeRamImage()
 
@@ -264,9 +268,11 @@ class Panda3dRenderer(World):
                 data = tex.getRamImageAs(channelOrder).getData()   # Python 2
             else:
                 # NOTE: see https://github.com/panda3d/panda3d/issues/173
-                data = bytes(memoryview(tex.getRamImageAs(channelOrder)))  # Python 3
+                data = bytes(memoryview(
+                    tex.getRamImageAs(channelOrder)))  # Python 3
 
-            image = np.frombuffer(data, dtype=np.uint8)  # Must match Texture.TUnsignedByte
+            # Must match Texture.TUnsignedByte
+            image = np.frombuffer(data, dtype=np.uint8)
 
             image.shape = (tex.getYSize(), tex.getXSize(), len(channelOrder))
             image = np.flipud(image)
@@ -281,7 +287,8 @@ class Panda3dRenderer(World):
 
             for name, tex in iteritems(self.depthTextures):
                 # XXX: not sure about calling makeRamImage() before getting the image data, since it returns an empty image
-                #      and overwrite any previously rendered image. We may just call it once when we create the texture.
+                # and overwrite any previously rendered image. We may just call
+                # it once when we create the texture.
                 if not tex.mightHaveRamImage():
                     tex.makeRamImage()
 
@@ -291,22 +298,28 @@ class Panda3dRenderer(World):
                     # NOTE: see https://github.com/panda3d/panda3d/issues/173
                     data = bytes(memoryview(tex.getRamImage()))  # Python 3
 
-                nbBytesComponentFromData = len(data) / (tex.getYSize() * tex.getXSize())
+                nbBytesComponentFromData = len(
+                    data) / (tex.getYSize() * tex.getXSize())
                 if nbBytesComponentFromData == 4:
-                    depthImage = np.frombuffer(data, dtype=np.float32)  # Must match Texture.TFloat
+                    # Must match Texture.TFloat
+                    depthImage = np.frombuffer(data, dtype=np.float32)
 
                 elif nbBytesComponentFromData == 2:
                     # NOTE: This can happen on some graphic hardware, where unsigned 16-bit data is stored
-                    #       despite setting the texture component type to 32-bit floating point.
-                    depthImage = np.frombuffer(data, dtype=np.uint16)  # Must match Texture.TFloat
+                    # despite setting the texture component type to 32-bit
+                    # floating point.
+                    # Must match Texture.TFloat
+                    depthImage = np.frombuffer(data, dtype=np.uint16)
                     depthImage = depthImage.astype(np.float32) / 65535
 
                 depthImage.shape = (tex.getYSize(), tex.getXSize())
                 depthImage = np.flipud(depthImage)
 
                 if mode == 'distance':
-                    # NOTE: in Panda3d, the returned depth image seems to be already linearized
-                    depthImage = self.zNear + depthImage / (self.zFar - self.zNear)
+                    # NOTE: in Panda3d, the returned depth image seems to be
+                    # already linearized
+                    depthImage = self.zNear + depthImage / \
+                        (self.zFar - self.zNear)
 
                     # Adapted from: https://stackoverflow.com/questions/6652253/getting-the-true-z-value-from-the-depth-buffer
                     # depthImage = 2.0 * depthImage - 1.0
@@ -316,7 +329,8 @@ class Panda3dRenderer(World):
                     # Nothing to do
                     pass
                 else:
-                    raise Exception('Unsupported output depth image mode: %s' % (mode))
+                    raise Exception(
+                        'Unsupported output depth image mode: %s' % (mode))
 
                 images[name] = depthImage
         else:
@@ -330,7 +344,8 @@ class Panda3dRenderer(World):
 
         self.graphicsEngine.renderFrame()
 
-        # NOTE: we need to call frame rendering twice in onscreen mode because of double-buffering
+        # NOTE: we need to call frame rendering twice in onscreen mode because
+        # of double-buffering
         if self.mode == 'onscreen':
             self.graphicsEngine.renderFrame()
 
@@ -506,7 +521,8 @@ class Panda3dSemanticsRenderer(World):
                     instance_color = self.instance_color_mapping[catName]
 
             else:
-                catName = self.categoryMapping.getFineGrainedCategoryForModelId(modelId)
+                catName = self.categoryMapping.getFineGrainedCategoryForModelId(
+                    modelId)
 
             color = MODEL_CATEGORY_COLOR_MAPPING[catName]
 
@@ -516,14 +532,16 @@ class Panda3dSemanticsRenderer(World):
                 self.instance_color_mapping[instance_id] = instance_color
                 color = instance_color
 
-            # Clear all GeomNode render attributes and set a specified flat color
+            # Clear all GeomNode render attributes and set a specified flat
+            # color
             for nodePath in model.findAllMatches('**/+GeomNode'):
                 geomNode = nodePath.node()
                 for n in range(geomNode.getNumGeoms()):
                     geomNode.setGeomState(n, RenderState.make(
                         ColorAttrib.makeFlat(LColor(color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, 1.0)), 1))
 
-            self.color_instance_mapping = {tuple(v): k for k, v in iteritems(self.instance_color_mapping)}
+            self.color_instance_mapping = {
+                tuple(v): k for k, v in iteritems(self.instance_color_mapping)}
 
             # Disable lights for this model
             model.setLightOff(1)
@@ -580,7 +598,8 @@ class Panda3dSemanticsRenderer(World):
             tex = Texture()
             tex.setFormat(Texture.FRgba8)
             tex.setComponentType(Texture.TUnsignedByte)
-            buf.addRenderTexture(tex, GraphicsOutput.RTMCopyRam, GraphicsOutput.RTPColor)
+            buf.addRenderTexture(
+                tex, GraphicsOutput.RTMCopyRam, GraphicsOutput.RTPColor)
             # XXX: should use tex.setMatchFramebufferFormat(True)?
 
             self.rgbBuffers[camera.getNetTag('agent-id')] = buf
@@ -614,21 +633,24 @@ class Panda3dSemanticsRenderer(World):
         images = dict()
         for name, tex in iteritems(self.rgbTextures):
             # XXX: not sure about calling makeRamImage() before getting the image data, since it returns an empty image
-            #      and overwrite any previously rendered image. We may just call it once when we create the texture.
+            # and overwrite any previously rendered image. We may just call it
+            # once when we create the texture.
             data = tex.getRamImageAs(channelOrder)
             if not tex.mightHaveRamImage():
                 tex.makeRamImage()
                 data = tex.getRamImageAs(channelOrder)
             try:
                 data_img = data.get_data()
-            except UnicodeDecodeError as _:
+            except UnicodeDecodeError:
                 tex.makeRamImage()
                 data = tex.getRamImageAs(channelOrder)
                 data_img = data.get_data()
             if (sys.version_info > (3, 0)):
-                image = np.fromstring(data_img, dtype=np.uint8)  # Must match Texture.TUnsignedByte
+                # Must match Texture.TUnsignedByte
+                image = np.fromstring(data_img, dtype=np.uint8)
             else:
-                image = np.frombuffer(data_img, dtype=np.uint8)  # Must match Texture.TUnsignedByte
+                # Must match Texture.TUnsignedByte
+                image = np.frombuffer(data_img, dtype=np.uint8)
             image.shape = (tex.getYSize(), tex.getXSize(), 4)
             image = np.flipud(image)
             images[name] = image
@@ -639,7 +661,8 @@ class Panda3dSemanticsRenderer(World):
 
         self.graphicsEngine.renderFrame()
 
-        # NOTE: we need to call frame rendering twice in onscreen mode because of double-buffering
+        # NOTE: we need to call frame rendering twice in onscreen mode because
+        # of double-buffering
         if self.mode == 'onscreen':
             self.graphicsEngine.renderFrame()
 
@@ -982,8 +1005,8 @@ class RgbRenderer(object):
                     rendererNp.reparentTo(physicsNp)
 
     def setBackgroundColor(self, rgba):
-        for buffer in six.itervalues(self.rgbBuffers):
-            buffer.setClearColor(LVector4f(*rgba))
+        for buf in six.itervalues(self.rgbBuffers):
+            buf.setClearColor(LVector4f(*rgba))
 
     def _initRgbCapture(self):
 
@@ -1517,9 +1540,11 @@ def getColorAttributesFromModel(model, region=None):
                     # RGBA texture
                     mask = img[:, :, -1] > 0.0
                     nbUnmasked = np.count_nonzero(mask)
-                    rgbColor = (1.0 / nbUnmasked * np.sum(img[:, :, :3] * mask[:, :, np.newaxis], axis=(0, 1)) / 255.0).tolist()
+                    rgbColor = (
+                        1.0 / nbUnmasked * np.sum(img[:, :, :3] * mask[:, :, np.newaxis], axis=(0, 1)) / 255.0).tolist()
                 else:
-                    raise Exception('Unsupported image shape: %s' % (str(img.shape)))
+                    raise Exception('Unsupported image shape: %s' %
+                                    (str(img.shape)))
 
                 rgbColors.append(rgbColor)
                 transparencies.append(False)
@@ -1539,7 +1564,8 @@ def getColorAttributesFromModel(model, region=None):
                         alpha = color[3]
 
                         if state.hasAttrib(TransparencyAttrib.getClassType()):
-                            transAttr = state.getAttrib(TransparencyAttrib.getClassType())
+                            transAttr = state.getAttrib(
+                                TransparencyAttrib.getClassType())
                             if transAttr.getMode() != TransparencyAttrib.MNone and alpha < 1.0:
                                 isTransparent = True
                         elif alpha < 1.0:
@@ -1548,7 +1574,8 @@ def getColorAttributesFromModel(model, region=None):
                     elif isinstance(color, LVecBase3f):
                         rgbColor = [color[0], color[1], color[2]]
                     else:
-                        raise Exception('Unsupported color class type: %s' % (color.__class__.__name__))
+                        raise Exception('Unsupported color class type: %s' % (
+                            color.__class__.__name__))
 
                     rgbColors.append(rgbColor)
                     transparencies.append(isTransparent)
@@ -1557,7 +1584,8 @@ def getColorAttributesFromModel(model, region=None):
 
                 else:
                     # Get colors from vertex data
-                    verAreas, verRgbColors, vertransparencies = getColorAttributesFromVertexData(geom, transformMat)
+                    verAreas, verRgbColors, vertransparencies = getColorAttributesFromVertexData(
+                        geom, transformMat)
                     areas.extend(verAreas)
                     rgbColors.extend(verRgbColors)
                     transparencies.extend(vertransparencies)

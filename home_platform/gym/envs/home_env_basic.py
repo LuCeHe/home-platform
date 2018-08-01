@@ -43,7 +43,8 @@ class HomeEnv(gym.Env):
         self.turning_speed = turning_speed  # how fast is the camera turning
         self.moving_speed = moving_speed  # how fast is the agent moving
         # empty init for tests
-        self.observation = Observation(None, None, np.zeros((100,100,3), dtype=np.uint8), None).as_dict()
+        self.observation = Observation(None, None, np.zeros(
+            (100, 100, 3), dtype=np.uint8), None).as_dict()
 
         self.metadata = {'render.modes': ['human', 'rgb_array']}
 

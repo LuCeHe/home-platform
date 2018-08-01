@@ -41,7 +41,7 @@ from panda3d.core import NodePath, Loader, LoaderOptions, Filename, TransformSta
     LMatrix4f, Spotlight, LVector3f, PointLight, PerspectiveLens, CS_zup_right, CS_yup_right,\
     BitMask32, ModelNode
 
-from home_platform.importer import obj2egg, obj2bam
+from home_platform.importer import obj2egg
 from home_platform.constants import MODEL_CATEGORY_MAPPING
 from home_platform.core import Scene
 from home_platform.utils import mat4ToNumpyArray
@@ -51,7 +51,8 @@ logger = logging.getLogger(__name__)
 
 def loadModel(modelPath):
     loader = Loader.getGlobalPtr()
-    # NOTE: disable disk and RAM caching to avoid filling memory when loading multiple scenes
+    # NOTE: disable disk and RAM caching to avoid filling memory when loading
+    # multiple scenes
     loaderOptions = LoaderOptions(LoaderOptions.LF_no_cache)
     node = loader.loadSync(Filename(modelPath), loaderOptions)
     if node is not None:
@@ -92,7 +93,7 @@ def data_dir():
 
 def get_available_houses():
     path = data_dir()
-    print ("DBG: SUNCG path:", path)
+    print("DBG: SUNCG path:", path)
     houses = os.listdir(os.path.join(path, "house"))
     return sorted(houses)
 
@@ -113,16 +114,20 @@ class ModelInformation(object):
                     rowStr = ','.join(row)
                     assert rowStr == ModelInformation.header
                 else:
-                    model_id, front, nmaterials, minPoint, \
-                    maxPoint, aligned_dims, _, variantIds = row
+                    model_id, front, nmaterials, minPoint, maxPoint, \
+                        aligned_dims, _, variantIds = row
                     if model_id in self.model_info:
-                        raise Exception('Model %s already exists!' % (model_id))
+                        raise Exception(
+                            'Model %s already exists!' % (model_id))
 
                     front = np.fromstring(front, dtype=np.float64, sep=',')
                     nmaterials = int(nmaterials)
-                    minPoint = np.fromstring(minPoint, dtype=np.float64, sep=',')
-                    maxPoint = np.fromstring(maxPoint, dtype=np.float64, sep=',')
-                    aligned_dims = np.fromstring(aligned_dims, dtype=np.float64, sep=',')
+                    minPoint = np.fromstring(
+                        minPoint, dtype=np.float64, sep=',')
+                    maxPoint = np.fromstring(
+                        maxPoint, dtype=np.float64, sep=',')
+                    aligned_dims = np.fromstring(
+                        aligned_dims, dtype=np.float64, sep=',')
                     variantIds = variantIds.split(',')
                     self.model_info[model_id] = {'front': front,
                                                  'nmaterials': nmaterials,
@@ -155,10 +160,11 @@ class ModelCategoryMapping(object):
                     assert rowStr == MODEL_CATEGORY_MAPPING["header"]
                 else:
                     _, model_id, fine_grained_class, \
-                    coarse_grained_class, _, nyuv2_40class, \
-                    wnsynsetid, wnsynsetkey = row
+                        coarse_grained_class, _, nyuv2_40class, \
+                        wnsynsetid, wnsynsetkey = row
                     if model_id in self.model_id:
-                        raise Exception('Model %s already exists!' % (model_id))
+                        raise Exception(
+                            'Model %s already exists!' % (model_id))
                     self.model_id.append(model_id)
 
                     self.fine_grained_class[model_id] = fine_grained_class
@@ -210,7 +216,8 @@ class ObjectVoxelData(object):
             line = f.readline().decode('ascii').strip()  # u'#binvox 1'
             header, version = line.split(" ")
             if header != '#binvox':
-                raise Exception('Unable to read header from file: %s' % (filename))
+                raise Exception(
+                    'Unable to read header from file: %s' % (filename))
             version = int(version)
             assert version == 1
 
@@ -218,13 +225,16 @@ class ObjectVoxelData(object):
             line = f.readline().decode('ascii').strip()  # u'dim 128 128 128'
             items = line.split(" ")
             assert items[0] == 'dim'
-            depth, height, width = np.fromstring(" ".join(items[1:]), sep=' ', dtype=np.int)
+            depth, height, width = np.fromstring(
+                " ".join(items[1:]), sep=' ', dtype=np.int)
 
             # XXX: what is this translation component?
-            line = f.readline().decode('ascii').strip()  # u'translate -0.176343 -0.356254 0.000702'
+            # u'translate -0.176343 -0.356254 0.000702'
+            line = f.readline().decode('ascii').strip()
             items = line.split(" ")
             assert items[0] == 'translate'
-            translation = np.fromstring(" ".join(items[1:]), sep=' ', dtype=np.float)
+            translation = np.fromstring(
+                " ".join(items[1:]), sep=' ', dtype=np.float)
 
             line = f.readline().decode('ascii').strip()  # u'scale 0.863783'
             items = line.split(" ")
@@ -258,44 +268,48 @@ class ObjectVoxelData(object):
             # FIXME: not sure about the particular dimension ordering here!
             voxels = voxels.reshape((width, height, depth))
 
-            logger.debug('Number of non-empty voxels read from file: %d' % (nrVoxels))
+            logger.debug(
+                'Number of non-empty voxels read from file: %d' % (nrVoxels))
 
         return ObjectVoxelData(voxels, translation, scale)
+
 
 def reglob(path, exp):
     # NOTE: adapted from https://stackoverflow.com/questions/13031989/regular-expression-using-in-glob-glob-of-python
     m = re.compile(exp)
     res = [f for f in os.listdir(path) if m.search(f)]
-    res = map(lambda x: "%s/%s" % ( path, x, ), res)
+    res = map(lambda x: "%s/%s" % (path, x, ), res)
     return res
 
+
 class SunCgModelLights(object):
-    
+
     def __init__(self, filename):
-        
+
         with open(filename) as f:
             self.data = json.load(f)
-        
+
         self.supportedModelIds = self.data.keys()
-    
+
     def getLightsForModel(self, modelId):
         lights = []
         if modelId in self.supportedModelIds:
-            
+
             for n, lightData in enumerate(self.data[modelId]):
-                               
+
                 attenuation = LVector3f(*lightData['attenuation'])
-                
-                #TODO: implement light power
-                #power = float(lightData['power'])
-                
+
+                # TODO: implement light power
+                # power = float(lightData['power'])
+
                 positionYup = LVector3f(*lightData['position'])
                 yupTozupMat = LMatrix4f.convertMat(CS_yup_right, CS_zup_right)
                 position = yupTozupMat.xformVec(positionYup)
-                            
+
                 colorHtml = lightData['color']
-                color = LVector3f(*[int('0x' + colorHtml[i:i+2], 16) for i in range(1, len(colorHtml), 2)]) / 255.0
-                            
+                color = LVector3f(*[int('0x' + colorHtml[i:i + 2], 16)
+                                    for i in range(1, len(colorHtml), 2)]) / 255.0
+
                 direction = None
                 lightType = lightData['type']
                 lightName = modelId + '-light-' + str(n)
@@ -303,54 +317,55 @@ class SunCgModelLights(object):
                     light = Spotlight(lightName)
                     light.setAttenuation(attenuation)
                     light.setColor(color)
-                     
+
                     cutoffAngle = float(lightData['cutoffAngle'])
                     lens = PerspectiveLens()
                     lens.setFov(cutoffAngle / np.pi * 180.0)
                     light.setLens(lens)
-                     
+
                     # NOTE: unused attributes
-                    #dropoffRate = float(lightData['dropoffRate'])
-                     
+                    # dropoffRate = float(lightData['dropoffRate'])
+
                     directionYup = LVector3f(*lightData['direction'])
                     direction = yupTozupMat.xformVec(directionYup)
-                    
+
                 elif lightType == 'PointLight':
                     light = PointLight(lightName)
                     light.setAttenuation(attenuation)
                     light.setColor(color)
-                    
+
                 elif lightType == 'LineLight':
-                    #XXX: we may wish to use RectangleLight from the devel branch of Panda3D 
+                    # XXX: we may wish to use RectangleLight from the devel
+                    # branch of Panda3D
                     light = PointLight(lightName)
                     light.setAttenuation(attenuation)
                     light.setColor(color)
-                    
+
                     # NOTE: unused attributes
-                    #dropoffRate = float(lightData['dropoffRate'])
-                    #cutoffAngle = float(lightData['cutoffAngle'])
-                    
-                    #position2Yup = LVector3f(*lightData['position2'])
-                    #position2 = yupTozupMat.xformVec(position2Yup)
-                
-                    #directionYup = LVector3f(*lightData['direction'])
-                    #direction = yupTozupMat.xformVec(directionYup)
-                    
+                    # dropoffRate = float(lightData['dropoffRate'])
+                    # cutoffAngle = float(lightData['cutoffAngle'])
+
+                    # position2Yup = LVector3f(*lightData['position2'])
+                    # position2 = yupTozupMat.xformVec(position2Yup)
+
+                    # directionYup = LVector3f(*lightData['direction'])
+                    # direction = yupTozupMat.xformVec(directionYup)
+
                 else:
                     raise Exception('Unsupported light type: %s' % (lightType))
-                
+
                 lightNp = NodePath(light)
-                
+
                 # Set position and direction of light
                 lightNp.setPos(position)
                 if direction is not None:
                     targetPos = position + direction
                     lightNp.look_at(targetPos, LVector3f.up())
-                
+
                 lights.append(lightNp)
-                
+
         return lights
-    
+
     def isModelSupported(self, modelId):
         isSupported = False
         if modelId in self.supportedModelIds:
@@ -369,7 +384,8 @@ def subdiviseLayoutObject(layoutNp):
         # Wall
 
         # Regroup WallInside and WallOutside geom nodes
-        maxIdx = np.max([int(geomNodes[i].getName().split('_')[-1]) for i in range(len(geomNodes))])
+        maxIdx = np.max([int(geomNodes[i].getName().split('_')[-1])
+                         for i in range(len(geomNodes))])
         wallGeomNodes = [[] for _ in range(maxIdx + 1)]
         for i in range(len(geomNodes)):
             name = geomNodes[i].getName()
@@ -400,7 +416,7 @@ def subdiviseLayoutObject(layoutNp):
 
 
 class SunCgSceneLoader(object):
-    
+
     @staticmethod
     def getHouseJsonPath(base_path, house_id):
         return os.path.join(
@@ -408,50 +424,51 @@ class SunCgSceneLoader(object):
             "house",
             house_id,
             "house.json")
-    
+
     @staticmethod
     def loadHouseFromJson(houseId, datasetRoot):
-        
+
         filename = SunCgSceneLoader.getHouseJsonPath(datasetRoot, houseId)
         with open(filename) as f:
             data = json.load(f)
         assert houseId == data['id']
         houseId = str(data['id'])
-        
+
         # Create new node for house instance
         houseNp = NodePath('house-' + str(houseId))
         houseNp.setTag('house-id', str(houseId))
-        
+
         objectIds = {}
         for levelId, level in enumerate(data['levels']):
             logger.debug('Loading Level %s to scene' % (str(levelId)))
-            
+
             # Create new node for level instance
             levelNp = houseNp.attachNewNode('level-' + str(levelId))
             levelNp.setTag('level-id', str(levelId))
-            
+
             levelObjectsNp = levelNp.attachNewNode('objects')
-            
+
             roomNpByNodeIndex = {}
             for nodeIndex, node in enumerate(level['nodes']):
-                if not node['valid'] == 1: continue
-                    
+                if not node['valid'] == 1:
+                    continue
+
                 if node['type'] == 'Box':
                     pass
                 elif node['type'] == 'Room':
                     modelId = str(node['modelId'])
                     logger.debug('Loading Room %s to scene' % (modelId))
-                    
+
                     # Create new nodes for room instance
                     instanceId = str(modelId) + '-0'
                     roomNp = levelNp.attachNewNode('room-' + instanceId)
                     roomNp.setTag('model-id', modelId)
                     roomNp.setTag('instance-id', instanceId)
                     roomNp.setTag('room-id', instanceId)
-                    
+
                     roomLayoutsNp = roomNp.attachNewNode('layouts')
                     roomObjectsNp = roomNp.attachNewNode('objects')
-                    
+
                     # Include some semantic information
                     roomTypes = []
                     for roomType in node['roomTypes']:
@@ -459,11 +476,11 @@ class SunCgSceneLoader(object):
                         if len(roomType) > 0:
                             roomTypes.append(roomType)
                     roomNp.setTag('room-types', ','.join(roomTypes))
-                    
-                    # Load models defined for this room 
+
+                    # Load models defined for this room
                     for roomObjFilename in reglob(os.path.join(datasetRoot, 'room', houseId),
                                                   modelId + '[a-z].bam'):
-                        
+
                         # NOTE: loading the BAM format is faster and more efficient
                         # Convert extension from OBJ + MTL to BAM format
                         f, _ = os.path.splitext(roomObjFilename)
@@ -474,10 +491,12 @@ class SunCgSceneLoader(object):
                         elif os.path.exists(eggModelFilename):
                             modelFilename = eggModelFilename
                         else:
-                            raise Exception('The SUNCG dataset object models need to be convert to Panda3D EGG or BAM format!')
+                            raise Exception(
+                                'The SUNCG dataset object models need to be convert to Panda3D EGG or BAM format!')
 
                         # Create new node for object instance
-                        objectModelId = os.path.splitext(os.path.basename(roomObjFilename))[0]
+                        objectModelId = os.path.splitext(
+                            os.path.basename(roomObjFilename))[0]
 
                         model = loadModel(modelFilename)
                         instanceId = str(objectModelId) + '-0'
@@ -495,29 +514,30 @@ class SunCgSceneLoader(object):
                     if 'nodeIndices' in node:
                         for childNodeIndex in node['nodeIndices']:
                             roomNpByNodeIndex[childNodeIndex] = roomObjectsNp
-                    
+
                 elif node['type'] == 'Object':
                     modelId = str(node['modelId'])
                     logger.debug('Loading Object %s to scene' % (modelId))
-                    
+
                     # Instance identification
                     if modelId in objectIds:
                         objectIds[modelId] = objectIds[modelId] + 1
                     else:
                         objectIds[modelId] = 0
-                    
+
                     # Create new node for object instance
                     instanceId = str(modelId) + '-' + str(objectIds[modelId])
                     objectNp = NodePath('object-' + instanceId)
                     objectNp.setTag('model-id', modelId)
                     objectNp.setTag('instance-id', instanceId)
-                    
+
                     # NOTE: loading the BAM format is faster and more efficient
                     # Convert extension from OBJ + MTL to BAM format
-                    objFilename = os.path.join(datasetRoot, 'object', node['modelId'], node['modelId'] + '.bam')
+                    objFilename = os.path.join(
+                        datasetRoot, 'object', node['modelId'], node['modelId'] + '.bam')
                     assert os.path.exists(objFilename)
                     f, _ = os.path.splitext(objFilename)
-                    
+
                     bamModelFilename = f + ".bam"
                     eggModelFilename = f + ".egg"
                     if os.path.exists(bamModelFilename):
@@ -525,53 +545,59 @@ class SunCgSceneLoader(object):
                     elif os.path.exists(eggModelFilename):
                         modelFilename = eggModelFilename
                     else:
-                        raise Exception('The SUNCG dataset object models need to be convert to Panda3D EGG or BAM format!')
-                    
+                        raise Exception(
+                            'The SUNCG dataset object models need to be convert to Panda3D EGG or BAM format!')
+
                     model = loadModel(modelFilename)
                     model.setName('model-' + os.path.basename(f))
                     model.reparentTo(objectNp)
                     model.hide(BitMask32.allOn())
-                    
-                    # 4x4 column-major transformation matrix from object coordinates to scene coordinates
-                    transform = np.array(node['transform']).reshape((4,4))
-                    
+
+                    # 4x4 column-major transformation matrix from object
+                    # coordinates to scene coordinates
+                    transform = np.array(node['transform']).reshape((4, 4))
+
                     # Transform from Y-UP to Z-UP coordinate systems
-                    #TODO: use Mat4.convertMat(CS_zup_right, CS_yup_right)
+                    # TODO: use Mat4.convertMat(CS_zup_right, CS_yup_right)
                     yupTransform = np.array([[1, 0, 0, 0],
-                                            [0, 0, -1, 0],
-                                            [0, 1, 0, 0],
-                                            [0, 0, 0, 1]])
-                    
+                                             [0, 0, -1, 0],
+                                             [0, 1, 0, 0],
+                                             [0, 0, 0, 1]])
+
                     zupTransform = np.array([[1, 0, 0, 0],
-                                            [0, 0, 1, 0],
-                                            [0, -1, 0, 0],
-                                            [0, 0, 0, 1]])
-                    
-                    transform = np.dot(np.dot(yupTransform, transform), zupTransform)
-                    transform = TransformState.makeMat(LMatrix4f(*transform.ravel()))
-                    
+                                             [0, 0, 1, 0],
+                                             [0, -1, 0, 0],
+                                             [0, 0, 0, 1]])
+
+                    transform = np.dot(
+                        np.dot(yupTransform, transform), zupTransform)
+                    transform = TransformState.makeMat(
+                        LMatrix4f(*transform.ravel()))
+
                     # Calculate the center of this object
                     minBounds, maxBounds = model.getTightBounds()
                     centerPos = minBounds + (maxBounds - minBounds) / 2.0
-                    
-                    # Add offset transform to make position relative to the center
-                    objectNp.setTransform(transform.compose(TransformState.makePos(centerPos)))
+
+                    # Add offset transform to make position relative to the
+                    # center
+                    objectNp.setTransform(transform.compose(
+                        TransformState.makePos(centerPos)))
                     model.setTransform(TransformState.makePos(-centerPos))
-                    
+
                     # Get the parent nodepath for the object (room or level)
                     if nodeIndex in roomNpByNodeIndex:
                         objectNp.reparentTo(roomNpByNodeIndex[nodeIndex])
                     else:
                         objectNp.reparentTo(levelObjectsNp)
-                        
+
                     # Validation
                     assert np.allclose(mat4ToNumpyArray(model.getNetTransform().getMat()),
                                        mat4ToNumpyArray(transform.getMat()), atol=1e-6)
-    
+
                 elif node['type'] == 'Ground':
                     modelId = str(node['modelId'])
                     logger.debug('Loading Ground %s to scene' % (modelId))
-                    
+
                     # Create new nodes for ground instance
                     instanceId = str(modelId) + '-0'
                     groundNp = levelNp.attachNewNode('ground-' + instanceId)
@@ -579,11 +605,11 @@ class SunCgSceneLoader(object):
                     groundNp.setTag('model-id', modelId)
                     groundNp.setTag('ground-id', instanceId)
                     groundLayoutsNp = groundNp.attachNewNode('layouts')
-                    
+
                     # Load model defined for this ground
                     for groundObjFilename in reglob(os.path.join(datasetRoot, 'room', houseId),
-                                                  modelId + '[a-z].bam'):
-                    
+                                                    modelId + '[a-z].bam'):
+
                         # NOTE: loading the BAM format is faster and more efficient
                         # Convert extension from OBJ + MTL to BAM format
                         f, _ = os.path.splitext(groundObjFilename)
@@ -594,60 +620,62 @@ class SunCgSceneLoader(object):
                         elif os.path.exists(eggModelFilename):
                             modelFilename = eggModelFilename
                         else:
-                            raise Exception('The SUNCG dataset object models need to be convert to Panda3D EGG or BAM format!')
-                
-                        objectModelId = os.path.splitext(os.path.basename(groundObjFilename))[0]
+                            raise Exception(
+                                'The SUNCG dataset object models need to be convert to Panda3D EGG or BAM format!')
+
+                        objectModelId = os.path.splitext(
+                            os.path.basename(groundObjFilename))[0]
                         instanceId = str(objectModelId) + '-0'
                         objectNp = NodePath('object-' + instanceId)
                         objectNp.reparentTo(groundLayoutsNp)
                         objectNp.setTag('model-id', objectModelId)
                         objectNp.setTag('instance-id', instanceId)
-                        
+
                         model = loadModel(modelFilename)
                         model.setName('model-' + os.path.basename(f))
                         model.reparentTo(objectNp)
                         model.hide(BitMask32.allOn())
-                
+
                 else:
-                    raise Exception('Unsupported node type: %s' % (node['type']))
-                
-                
+                    raise Exception('Unsupported node type: %s' %
+                                    (node['type']))
+
         scene = Scene('house-' + houseId)
         houseNp.reparentTo(scene.scene)
-                
+
         # Recenter objects in rooms
         for room in scene.scene.findAllMatches('**/room*'):
-         
+
             # Calculate the center of this room
             bounds = room.getTightBounds()
             if bounds is not None:
                 minBounds, maxBounds = room.getTightBounds()
                 centerPos = minBounds + (maxBounds - minBounds) / 2.0
-                  
+
                 # Add offset transform to room node
                 room.setTransform(TransformState.makePos(centerPos))
-                  
+
                 # Add recentering transform to all children nodes
                 for childNp in room.getChildren():
                     childNp.setTransform(TransformState.makePos(-centerPos))
             else:
                 # This usually means the room has no layout or objects
                 pass
-         
+
         # Recenter objects in grounds
         for ground in scene.scene.findAllMatches('**/ground*'):
-         
+
             # Calculate the center of this ground
             minBounds, maxBounds = ground.getTightBounds()
             centerPos = minBounds + (maxBounds - minBounds) / 2.0
-              
+
             # Add offset transform to ground node
             ground.setTransform(TransformState.makePos(centerPos))
-              
+
             # Add recentering transform to all children nodes
             for childNp in ground.getChildren():
                 childNp.setTransform(TransformState.makePos(-centerPos))
-                
+
         return scene
 
 
