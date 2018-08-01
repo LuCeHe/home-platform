@@ -28,7 +28,7 @@ done
 
 PYV=`python -c "import sys;t='{v[0]}.{v[1]}'.format(v=list(sys.version_info[:2]));sys.stdout.write(t)";`
 # if the default Python is v3.x then we force using the -py3 switch
-if [[ $PYV -gt 3.0 ]]; then
+if (( $(echo "$PYV > 3.0" | bc -l) )); then
     python_version=3
 fi
 
