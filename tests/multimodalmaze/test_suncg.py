@@ -69,7 +69,7 @@ class TestSunCgSceneLoader(unittest.TestCase):
         scene = SunCgSceneLoader.loadHouseFromJson('0004d52d1aeeb8ae6de39d6bd993e992', TEST_SUNCG_DATA_DIR)
         self.assertTrue(scene.getTotalNbHouses() == 1)
         self.assertTrue(scene.getTotalNbRooms() == 4)
-        self.assertTrue(scene.getTotalNbObjects() == 55)
+        self.assertTrue(scene.getTotalNbObjects() == 71)
         self.assertTrue(scene.getTotalNbAgents() == 1)
 
 

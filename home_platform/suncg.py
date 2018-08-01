@@ -34,7 +34,7 @@ import numpy as np
 
 from panda3d.core import NodePath, Loader, LoaderOptions, Filename, TransformState,\
     LMatrix4f, Spotlight, LVector3f, PointLight, PerspectiveLens, CS_zup_right, CS_yup_right,\
-    BitMask32
+    BitMask32, ModelNode
 
 from home_platform.constants import MODEL_CATEGORY_MAPPING
 from home_platform.core import Scene
@@ -231,8 +231,8 @@ class ObjectVoxelData(object):
             index = 0
             endIndex = 0
             while endIndex < size:
-                value = np.fromstring(f.read(1), dtype=np.uint8)[0]
-                count = np.fromstring(f.read(1), dtype=np.uint8)[0]
+                value = np.frombuffer(f.read(1), dtype=np.uint8)[0]
+                count = np.frombuffer(f.read(1), dtype=np.uint8)[0]
                 endIndex = index + count
                 assert endIndex <= size
 
@@ -346,6 +346,48 @@ class SunCgModelLights(object):
             isSupported = True
         return isSupported
 
+
+def subdiviseLayoutObject(layoutNp):
+
+    objectModelId = layoutNp.getTag('model-id')
+
+    geomNodes = list(layoutNp.findAllMatches('**/+GeomNode'))
+
+    layoutNps = []
+    if objectModelId.endswith('w'):
+        # Wall
+
+        # Regroup WallInside and WallOutside geom nodes
+        maxIdx = np.max([int(geomNodes[i].getName().split('_')[-1]) for i in range(len(geomNodes))])
+        wallGeomNodes = [[] for _ in range(maxIdx + 1)]
+        for i in range(len(geomNodes)):
+            name = geomNodes[i].getName()
+            idx = int(name.split('_')[-1])
+            wallGeomNodes[idx].append(geomNodes[i])
+
+        for i in range(len(wallGeomNodes)):
+
+            instanceId = str(objectModelId) + '-' + str(i)
+            objectNp = NodePath('object-' + instanceId)
+            objectNp.setTag('model-id', objectModelId)
+            objectNp.setTag('instance-id', instanceId)
+
+            model = NodePath(ModelNode('model-' + instanceId))
+            # model.setTag('model-filename', os.path.abspath(modelPath))
+            model.reparentTo(objectNp)
+            model.hide(BitMask32.allOn())
+
+            for geomNode in wallGeomNodes[i]:
+                geomNode.reparentTo(model)
+
+            layoutNps.append(objectNp)
+    else:
+        # Floor or ceiling
+        layoutNps.append(layoutNp)
+
+    return layoutNps
+
+
 class SunCgSceneLoader(object):
     
     @staticmethod
@@ -394,17 +436,22 @@ class SunCgSceneLoader(object):
                     roomNp = levelNp.attachNewNode('room-' + instanceId)
                     roomNp.setTag('model-id', modelId)
                     roomNp.setTag('instance-id', instanceId)
+                    roomNp.setTag('room-id', instanceId)
+                    
                     roomLayoutsNp = roomNp.attachNewNode('layouts')
                     roomObjectsNp = roomNp.attachNewNode('objects')
                     
                     # Include some semantic information
-                    roomTypes = node['roomTypes']
-                    roomTypes = [roomType.lower() for roomType in roomTypes]
+                    roomTypes = []
+                    for roomType in node['roomTypes']:
+                        roomType = roomType.lower().strip()
+                        if len(roomType) > 0:
+                            roomTypes.append(roomType)
                     roomNp.setTag('room-types', ','.join(roomTypes))
                     
                     # Load models defined for this room 
                     for roomObjFilename in reglob(os.path.join(datasetRoot, 'room', houseId),
-                                                  modelId + '[a-z].obj'):
+                                                  modelId + '[a-z].bam'):
                         
                         # NOTE: loading the BAM format is faster and more efficient
                         # Convert extension from OBJ + MTL to BAM format
@@ -419,18 +466,21 @@ class SunCgSceneLoader(object):
                             raise Exception('The SUNCG dataset object models need to be convert to Panda3D EGG or BAM format!')
 
                         # Create new node for object instance
-                        instanceId = str(modelId) + '-0'
-                        modelId = os.path.splitext(os.path.basename(roomObjFilename))[0]
-                        objectNp = NodePath('object-' + instanceId)
-                        objectNp.reparentTo(roomLayoutsNp)
-                        objectNp.setTag('model-id', modelId)
-                        objectNp.setTag('instance-id', instanceId)
-                        
+                        objectModelId = os.path.splitext(os.path.basename(roomObjFilename))[0]
+
                         model = loadModel(modelFilename)
+                        instanceId = str(objectModelId) + '-0'
+                        objectNp = NodePath('object-' + instanceId)
+                        objectNp.setTag('model-id', objectModelId)
+                        objectNp.setTag('instance-id', instanceId)
+
                         model.setName('model-' + os.path.basename(f))
                         model.reparentTo(objectNp)
                         model.hide(BitMask32.allOn())
-                    
+
+                        for subObjectNp in subdiviseLayoutObject(objectNp):
+                            subObjectNp.reparentTo(roomLayoutsNp)
+
                     if 'nodeIndices' in node:
                         for childNodeIndex in node['nodeIndices']:
                             roomNpByNodeIndex[childNodeIndex] = roomObjectsNp
@@ -453,7 +503,7 @@ class SunCgSceneLoader(object):
                     
                     # NOTE: loading the BAM format is faster and more efficient
                     # Convert extension from OBJ + MTL to BAM format
-                    objFilename = os.path.join(datasetRoot, 'object', node['modelId'], node['modelId'] + '.obj')
+                    objFilename = os.path.join(datasetRoot, 'object', node['modelId'], node['modelId'] + '.bam')
                     assert os.path.exists(objFilename)
                     f, _ = os.path.splitext(objFilename)
                     
@@ -516,11 +566,12 @@ class SunCgSceneLoader(object):
                     groundNp = levelNp.attachNewNode('ground-' + instanceId)
                     groundNp.setTag('instance-id', instanceId)
                     groundNp.setTag('model-id', modelId)
+                    groundNp.setTag('ground-id', instanceId)
                     groundLayoutsNp = groundNp.attachNewNode('layouts')
                     
                     # Load model defined for this ground
                     for groundObjFilename in reglob(os.path.join(datasetRoot, 'room', houseId),
-                                                  modelId + '[a-z].obj'):
+                                                  modelId + '[a-z].bam'):
                     
                         # NOTE: loading the BAM format is faster and more efficient
                         # Convert extension from OBJ + MTL to BAM format
@@ -534,11 +585,11 @@ class SunCgSceneLoader(object):
                         else:
                             raise Exception('The SUNCG dataset object models need to be convert to Panda3D EGG or BAM format!')
                 
-                        instanceId = str(modelId) + '-0'
-                        modelId = os.path.splitext(os.path.basename(groundObjFilename))[0]
+                        objectModelId = os.path.splitext(os.path.basename(groundObjFilename))[0]
+                        instanceId = str(objectModelId) + '-0'
                         objectNp = NodePath('object-' + instanceId)
                         objectNp.reparentTo(groundLayoutsNp)
-                        objectNp.setTag('model-id', modelId)
+                        objectNp.setTag('model-id', objectModelId)
                         objectNp.setTag('instance-id', instanceId)
                         
                         model = loadModel(modelFilename)
@@ -550,7 +601,7 @@ class SunCgSceneLoader(object):
                     raise Exception('Unsupported node type: %s' % (node['type']))
                 
                 
-        scene = Scene()
+        scene = Scene('house-' + houseId)
         houseNp.reparentTo(scene.scene)
                 
         # Recenter objects in rooms

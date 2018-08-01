@@ -54,15 +54,15 @@ class HomeEnv(gym.Env):
         self.data_path = data_dir()
         print("DEBUG: SUNCG DATA DIRECTORY:", self.data_path)
 
-        self.action_space = spaces.MultiDiscrete([[0, 4], [0, 4]])
+        self.action_space = spaces.MultiDiscrete([5, 5])
         self.observation_space = spaces.Dict({
             # TODO what are the actual bounds of all possible houses?
             # position is x, y, z
-            "position": spaces.Box(low=-100, high=100, shape=(3)),
+            "position": spaces.Box(low=-100, high=100, shape=(3,)),
 
             # TODO get actual box for HPR
             # orientation is HPR / heading, pitch, roll
-            "orientation": spaces.Box(low=-100, high=100, shape=(3)),
+            "orientation": spaces.Box(low=-100, high=100, shape=(3,)),
 
             "image": spaces.Box(low=0, high=255, shape=(500, 500, 3)),
 

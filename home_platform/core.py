@@ -33,8 +33,11 @@ class World(object):
 
 class Scene(object):
     
-    def __init__(self):
+    def __init__(self, sceneId=None):
         self.scene = NodePath('scene')
+        if sceneId is not None:
+            self.scene.setTag('scene-id', str(sceneId))
+        self.sceneId = sceneId
         agents = self.scene.attachNewNode('agents')
         self.agents = [agents.attachNewNode('agent-0'),]
         self.agents[0].setTag('agent-id', 'agent-0')

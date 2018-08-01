@@ -30,7 +30,7 @@ from __future__ import print_function
 import os, sys
 import logging
 import numpy as np
-import scipy.ndimage
+import imageio
 
 from panda3d.core import VBase4, PointLight, AmbientLight, AntialiasAttrib, \
     GeomVertexReader, GeomTristrips, GeomTriangles, LineStream, SceneGraphAnalyzer, \
@@ -67,7 +67,7 @@ class Panda3dRenderer(World):
 
         # Change some scene attributes for rendering
         self.scene.scene.setAttrib(RescaleNormalAttrib.makeDefault())
-        self.scene.scene.setTwoSided(0)
+        self.scene.scene.setTwoSided(True)
 
         self._initModels()
 
@@ -520,7 +520,7 @@ class Panda3dSemanticsRenderer(World):
                     geomNode.setGeomState(n, RenderState.make(
                         ColorAttrib.makeFlat(LColor(color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, 1.0)), 1))
 
-            self.color_instance_mapping = {tuple(v): k for k, v in self.instance_color_mapping.iteritems()}
+            self.color_instance_mapping = {tuple(v): k for k, v in iteritems(self.instance_color_mapping)}
 
             # Disable lights for this model
             model.setLightOff(1)
@@ -813,7 +813,7 @@ def getColorAttributesFromVertexData(geom, transform=None):
     return areas, rgbColors, transparencies
 
 
-def getColorAttributesFromModel(model):
+def getColorAttributesFromModel(model, region=None):
     # Calculate the net transformation
     transform = model.getNetTransform()
     transformMat = transform.getMat()
@@ -824,6 +824,9 @@ def getColorAttributesFromModel(model):
     transparencies = []
     for nodePath in model.findAllMatches('**/+GeomNode'):
         geomNode = nodePath.node()
+
+        if region is not None and region not in geomNode.getName():
+            continue
 
         for n in range(geomNode.getNumGeoms()):
             state = geomNode.getGeomState(n)
@@ -838,15 +841,24 @@ def getColorAttributesFromModel(model):
 
                 # Load texture image from file and compute average color
                 texFilename = str(tex.getFullpath())
-                img = scipy.ndimage.imread(texFilename)
+                img = imageio.imread(texFilename)
 
                 texture = os.path.splitext(os.path.basename(texFilename))[0]
 
-                # TODO: handle black-and-white and RGBA texture
                 assert img.dtype == np.uint8
-                assert img.ndim == 3 and img.shape[-1] == 3
+                assert img.ndim == 3
 
-                rgbColor = (np.mean(img, axis=(0, 1)) / 255.0).tolist()
+                # TODO: handle black-and-white
+                if img.shape[-1] == 3:
+                    # RGB texture
+                    rgbColor = (np.mean(img, axis=(0, 1)) / 255.0).tolist()
+                elif img.shape[-1] == 4:
+                    # RGBA texture
+                    mask = img[:, :, -1] > 0.0
+                    nbUnmasked = np.count_nonzero(mask)
+                    rgbColor = (1.0 / nbUnmasked * np.sum(img[:, :, :3] * mask[:, :, np.newaxis], axis=(0, 1)) / 255.0).tolist()
+                else:
+                    raise Exception('Unsupported image shape: %s' % (str(img.shape)))
 
                 rgbColors.append(rgbColor)
                 transparencies.append(False)
