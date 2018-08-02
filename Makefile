@@ -1,10 +1,10 @@
 all: clean build
 
 build:
-		python3 setup.py build_ext
+		python setup.py build_ext
 
 install:
-		python3 setup.py install
+		python setup.py install
 
 clean:
 		rm -rf build 
