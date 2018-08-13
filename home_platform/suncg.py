@@ -129,11 +129,12 @@ class ModelInformation(object):
                     aligned_dims = np.fromstring(
                         aligned_dims, dtype=np.float64, sep=',')
                     variantIds = variantIds.split(',')
-                    self.model_info[model_id] = {'front': front,
+                    self.model_info[model_id] = {'model-id': model_id,
+                                                 'front': front,
                                                  'nmaterials': nmaterials,
                                                  'minPoint': minPoint,
                                                  'maxPoint': maxPoint,
-                                                 'aligned_dims': aligned_dims,
+                                                 'aligned-dims': aligned_dims,
                                                  'variantIds': variantIds}
 
     def getModelInfo(self, modelId):
@@ -148,6 +149,7 @@ class ModelCategoryMapping(object):
         self.nyuv2_40class = {}
         self.wnsynsetid = {}
         self.wnsynsetkey = {}
+        self.model_info = {}
 
         self._parseFromCSV(filename)
 
@@ -172,6 +174,13 @@ class ModelCategoryMapping(object):
                     self.nyuv2_40class[model_id] = nyuv2_40class
                     self.wnsynsetid[model_id] = wnsynsetid
                     self.wnsynsetkey[model_id] = wnsynsetkey
+
+                    self.model_info[model_id] = {'model-id': model_id,
+                                                 'fine-class': fine_grained_class,
+                                                 'coarse-class': coarse_grained_class,
+                                                 'nyuv2-class': nyuv2_40class,
+                                                 'wnsynsetid': wnsynsetid,
+                                                 'wnsynsetkey': wnsynsetkey}
 
     def _printFineGrainedClassListAsDict(self):
         for c in sorted(set(self.fine_grained_class.values())):

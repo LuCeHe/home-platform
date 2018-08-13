@@ -982,7 +982,7 @@ class RgbRenderer(object):
 
     def notifySceneChanged(self):
 
-        for modelNp in self.scene.scene.findAllMatches('**/object-*/model-*'):
+        for modelNp in self.scene.scene.findAllMatches('**/model-*'):
 
             isInitialized = False
             objectNp = modelNp.getParent()
