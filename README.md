@@ -51,6 +51,13 @@ cd $HOME/work
 git clone https://github.com/HoME-Platform/home-platform.git
 ```
 
+To compile C++ modules:
+
+```
+cd $HOME/work/home-platform
+make build
+```
+
 Note that the library must be in the PYTHONPATH environment variable for Python to be able to find it:
 ```
 export PYTHONPATH=$HOME/work/home-platform:$PYTHONPATH 
