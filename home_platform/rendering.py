@@ -46,7 +46,6 @@ from panda3d.core import GraphicsEngine, GraphicsPipeSelection, Loader, RescaleN
 from home_platform.core import World
 from home_platform.suncg import ModelCategoryMapping
 from home_platform.constants import MODEL_CATEGORY_COLOR_MAPPING
-from six import iteritems
 
 logger = logging.getLogger(__name__)
 
@@ -256,7 +255,7 @@ class Panda3dRenderer(World):
 
     def getRgbImages(self, channelOrder="RGB"):
         images = dict()
-        for name, tex in iteritems(self.rgbTextures):
+        for name, tex in six.iteritems(self.rgbTextures):
 
             # XXX: not sure about calling makeRamImage() before getting the image data, since it returns an empty image
             # and overwrite any previously rendered image. We may just call it
@@ -285,7 +284,7 @@ class Panda3dRenderer(World):
         images = dict()
         if self.depth:
 
-            for name, tex in iteritems(self.depthTextures):
+            for name, tex in six.iteritems(self.depthTextures):
                 # XXX: not sure about calling makeRamImage() before getting the image data, since it returns an empty image
                 # and overwrite any previously rendered image. We may just call
                 # it once when we create the texture.
@@ -541,7 +540,7 @@ class Panda3dSemanticsRenderer(World):
                         ColorAttrib.makeFlat(LColor(color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, 1.0)), 1))
 
             self.color_instance_mapping = {
-                tuple(v): k for k, v in iteritems(self.instance_color_mapping)}
+                tuple(v): k for k, v in six.iteritems(self.instance_color_mapping)}
 
             # Disable lights for this model
             model.setLightOff(1)
@@ -631,7 +630,7 @@ class Panda3dSemanticsRenderer(World):
 
     def getRgbaImages(self, channelOrder="RGBA"):
         images = dict()
-        for name, tex in iteritems(self.rgbTextures):
+        for name, tex in six.iteritems(self.rgbTextures):
             # XXX: not sure about calling makeRamImage() before getting the image data, since it returns an empty image
             # and overwrite any previously rendered image. We may just call it
             # once when we create the texture.
@@ -665,6 +664,233 @@ class Panda3dSemanticsRenderer(World):
         # of double-buffering
         if self.mode == 'onscreen':
             self.graphicsEngine.renderFrame()
+
+
+class SemanticRenderer(object):
+
+    def __init__(self, scene, size=(512, 512), mode='offscreen',
+                 zNear=0.1, zFar=1000.0, fov=40.0,
+                 cameraTransform=None):
+
+        # Off-screen buffers are not supported in OSX
+        if sys.platform == 'darwin':
+            mode = 'onscreen'
+
+        super(SemanticRenderer, self).__init__()
+
+        self.__dict__.update(scene=scene, size=size, mode=mode, zNear=zNear,
+                             zFar=zFar, fov=fov,
+                             cameraTransform=cameraTransform)
+        self.categoryColors = dict()
+        self.instanceColors = dict()
+
+        self.cameraMask = BitMask32.bit(1)
+        self.graphicsEngine = GraphicsEngine.getGlobalPtr()
+        self.loader = Loader.getGlobalPtr()
+        self.graphicsEngine.setDefaultLoader(self.loader)
+
+        self._initModels()
+
+        selection = GraphicsPipeSelection.getGlobalPtr()
+        self.pipe = selection.makeDefaultPipe()
+        logger.debug('Using %s' % (self.pipe.getInterfaceName()))
+
+        # Attach a camera to every agent in the scene
+        self.cameras = []
+        for agentNp in self.scene.scene.findAllMatches('**/agents/agent*'):
+            camera = agentNp.attachNewNode(ModelNode('render-semantic'))
+            if self.cameraTransform is not None:
+                camera.setTransform(cameraTransform)
+            camera.node().setPreserveTransform(ModelNode.PTLocal)
+            self.cameras.append(camera)
+
+            # Reparent node below the existing physic node (if any)
+            physicsNp = agentNp.find('**/physics')
+            if not physicsNp.isEmpty():
+                camera.reparentTo(physicsNp)
+
+        self.rgbBuffers = dict()
+        self.rgbTextures = dict()
+
+        self._initRgbCapture()
+
+    def _initInstanceColors(self, models, shuffle=False):
+        try:
+            SUNCG_DATA_DIR = os.environ["SUNCG_DATA_DIR"]
+        except KeyError:
+            raise Exception("Please set the environment variable SUNCG_DATA_DIR")
+
+        categoryMapping = ModelCategoryMapping(
+            os.path.join(
+                SUNCG_DATA_DIR,
+                'metadata',
+                'ModelCategoryMapping.csv'))
+
+        catNames = categoryMapping.getFineGrainedClassList()
+        size = int(np.ceil(np.cbrt(len(catNames)) - 1e-6))
+
+        # Uniform sampling of colors
+        colors = np.zeros((size ** 3, 3))
+        i = 0
+        for r in np.linspace(0.0, 1.0, size):
+            for g in np.linspace(0.0, 1.0, size):
+                for b in np.linspace(0.0, 1.0, size):
+                    colors[i] = [r, g, b]
+                    i += 1
+
+        if shuffle:
+            # Shuffle
+            indices = np.arange(len(colors))
+            np.random.shuffle(indices)
+            colors = colors[indices]
+
+        categoryColors = dict()
+        for catName, color in zip(catNames, colors):
+            categoryColors[catName] = color
+
+        instanceColors = dict()
+        for model in models:
+            modelId = model.getNetTag('model-id')
+            if 'fr_' in modelId:
+                if modelId.endswith('c'):
+                    catName = 'ceiling'
+                elif modelId.endswith('f'):
+                    catName = 'floor'
+                elif modelId.endswith('w'):
+                    catName = 'wall'
+            else:
+                catName = categoryMapping.getFineGrainedCategoryForModelId(modelId)
+
+            instanceId = model.getNetTag('instance-id')
+            instanceColors[instanceId] = colors[catNames.index(catName)]
+
+        return instanceColors, categoryColors
+
+    def _initModels(self):
+
+        # Get the list of all models in the scene
+        models = []
+        for model in self.scene.scene.findAllMatches('**/objects/*/+ModelNode'):
+            models.append(model)
+        for model in self.scene.scene.findAllMatches('**/layouts/*/+ModelNode'):
+            models.append(model)
+
+        # Associate a color with each model
+        self.instanceColors, self.categoryColors = self._initInstanceColors(models)
+
+        for model in models:
+
+            objectNp = model.getParent()
+            rendererNp = objectNp.attachNewNode('render-semantic')
+            model = model.copyTo(rendererNp)
+
+            # Set the model to be visible only to this camera
+            model.hide(BitMask32.allOn())
+            model.show(self.cameraMask)
+
+            # Get semantic-related color of model
+            instanceId = model.getNetTag('instance-id')
+            color = self.instanceColors[instanceId]
+
+            # Clear all GeomNode render attributes and set a specified flat
+            # color
+            for nodePath in model.findAllMatches('**/+GeomNode'):
+                geomNode = nodePath.node()
+                for n in range(geomNode.getNumGeoms()):
+                    geomNode.setGeomState(n, RenderState.make(
+                        ColorAttrib.makeFlat(LColor(color[0], color[1], color[2], 1.0)), 1))
+
+            # Disable lights for this model
+            model.setLightOff(1)
+
+            # Enable antialiasing
+            model.setAntialias(AntialiasAttrib.MAuto)
+
+            # Reparent render node below the existing physic node (if any)
+            physicsNp = objectNp.find('**/physics')
+            if not physicsNp.isEmpty():
+                rendererNp.reparentTo(physicsNp)
+
+    def _initRgbCapture(self):
+
+        for camera in self.cameras:
+
+            camNode = Camera('Semantic rendering camera')
+            camNode.setCameraMask(self.cameraMask)
+            lens = PerspectiveLens()
+            lens.setFov(self.fov)
+            lens.setAspectRatio(float(self.size[0]) / float(self.size[1]))
+            lens.setNear(self.zNear)
+            lens.setFar(self.zFar)
+            camNode.setLens(lens)
+            camNode.setScene(self.scene.scene)
+            cam = camera.attachNewNode(camNode)
+
+            winprops = WindowProperties.size(self.size[0], self.size[1])
+            fbprops = FrameBufferProperties.getDefault()
+            fbprops = FrameBufferProperties(fbprops)
+            fbprops.setRgbaBits(8, 8, 8, 8)
+
+            flags = GraphicsPipe.BFFbPropsOptional
+            if self.mode == 'onscreen':
+                flags = flags | GraphicsPipe.BFRequireWindow
+            elif self.mode == 'offscreen':
+                flags = flags | GraphicsPipe.BFRefuseWindow
+            else:
+                raise Exception('Unsupported rendering mode: %s' % (self.mode))
+
+            buf = self.graphicsEngine.makeOutput(self.pipe, 'RGB buffer - semantic rendering', 0, fbprops,
+                                                 winprops, flags)
+            if buf is None:
+                raise Exception('Unable to create RGB buffer')
+
+            # Set to render at the end
+            buf.setSort(10000)
+
+            dr = buf.makeDisplayRegion()
+            dr.setSort(0)
+            dr.setCamera(cam)
+            dr = camNode.getDisplayRegion(0)
+
+            tex = Texture()
+            tex.setFormat(Texture.FRgba8)
+            tex.setComponentType(Texture.TUnsignedByte)
+            buf.addRenderTexture(
+                tex, GraphicsOutput.RTMCopyRam, GraphicsOutput.RTPColor)
+            tex.makeRamImage()
+            # XXX: should use tex.setMatchFramebufferFormat(True)?
+
+            self.rgbBuffers[camera.getNetTag('agent-id')] = buf
+            self.rgbTextures[camera.getNetTag('agent-id')] = tex
+
+    def destroy(self):
+        self.graphicsEngine.removeAllWindows()
+        del self.pipe
+
+    def getSemanticImage(self, agentId, channelOrder="RGBA"):
+
+        self.graphicsEngine.renderFrame()
+
+        # NOTE: we need to call frame rendering twice in onscreen mode because
+        # of double-buffering
+        if self.mode == 'onscreen':
+            self.graphicsEngine.renderFrame()
+
+        tex = self.rgbTextures[agentId]
+        data = tex.getRamImageAs(channelOrder)
+        if (sys.version_info > (3, 0)):
+            # Must match Texture.TUnsignedByte
+            # NOTE: see https://github.com/panda3d/panda3d/issues/173
+            data_img = bytes(memoryview(data))
+            image = np.frombuffer(data_img, dtype=np.uint8)
+        else:
+            # Must match Texture.TUnsignedByte
+            data_img = data.get_data()
+            image = np.frombuffer(data_img, dtype=np.uint8)
+        image.shape = (tex.getYSize(), tex.getXSize(), 4)
+        image = np.flipud(image)
+
+        return image
 
 
 class InstancesRenderer(object):
@@ -1486,7 +1712,7 @@ def getColorAttributesFromVertexData(geom, transform=None):
     areas = []
     rgbColors = []
     transparencies = []
-    for color, area in iteritems(colorsTotalAreas):
+    for color, area in six.iteritems(colorsTotalAreas):
         areas.append(area)
         rgbColors.append(list(color[:3]))
 

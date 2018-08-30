@@ -215,6 +215,19 @@ def getModelBaseDimensions(model):
     return width, depth, heigth
 
 
+def getRandom2dMapCoordinates(occupancyMap):
+    validIndices = np.argwhere(occupancyMap == 1.0)
+    if len(validIndices) == 0:
+        raise Exception('Occupancy map has no valid regions')
+    idx = np.random.randint(0, len(validIndices))
+
+    # NOTE: occupancy map is an image and thus the Y-axis is the first dimension
+    xi = int(validIndices[idx][1])
+    yi = int(validIndices[idx][0])
+
+    return (yi, xi)
+
+
 class NavigationHelper(object):
 
     closedStandardDoorModelIds = [

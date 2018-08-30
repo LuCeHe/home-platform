@@ -169,6 +169,11 @@ class Panda3dBulletPhysics(World):
 
         # Load layout objects as meshes
         for model in self.scene.scene.findAllMatches('**/layouts/object*/model*'):
+            
+            # NOTE: ignore models that have no geometry defined
+            if model.getTightBounds() is None:
+                logger.warning('Object %s has no geometry defined and will be ignored for physics!' % (str(model)))
+                continue
 
             shape, transform = getCollisionShapeFromModel(
                 model, mode='mesh', defaultCentered=False)
@@ -280,6 +285,11 @@ class Panda3dBulletPhysics(World):
             # XXX: we could create BulletGhostNode instance for non-collidable objects,
             #  but we would need to filter out the collisions later on
             if modelId not in self.openedDoorModelIds:
+
+                # NOTE: ignore models that have no geometry defined
+                if model.getTightBounds() is None:
+                    logger.warning('Object %s has no geometry defined and will be ignored for physics!' % (str(model)))
+                    continue
 
                 shape, transform = getCollisionShapeFromModel(
                     model, self.objectMode, defaultCentered=True)
